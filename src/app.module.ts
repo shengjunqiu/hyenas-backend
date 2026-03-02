@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { MerchantFieldModule } from './modules/merchant-field/merchant-field.module';
 import { MerchantStatusModule } from './modules/merchant-status/merchant-status.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -14,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     AdminModule,
     MerchantStatusModule,
+    MerchantFieldModule,
   ],
   controllers: [AppController],
   providers: [AppService],

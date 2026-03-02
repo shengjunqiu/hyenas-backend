@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { Log } from '../../common/decorators/log.decorator';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -31,6 +32,7 @@ export class AuthController {
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
+  @Log('AUTH', 'LOGOUT', { targetType: 'ADMIN', recordResponseBody: false })
   @ApiBearerAuth()
   @ApiOperation({ summary: '退出登录' })
   logout() {

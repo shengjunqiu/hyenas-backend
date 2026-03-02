@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { OperationLogInterceptor } from './common/interceptors/operation-log.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
@@ -14,7 +15,10 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalInterceptors(
+    app.get(OperationLogInterceptor),
+    new TransformInterceptor(),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('食品经营商家管理系统 API')

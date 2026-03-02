@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  SUPER
+  NORMAL
+
+  @@map("admin_role")
+}
+
+enum AdminStatus {
+  ENABLED
+  DISABLED
+
+  @@map("admin_status")
+}
+
+enum MerchantFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+
+  @@map("merchant_field_type")
+}
+
+model Admin {
+  id                  Int                 @id @default(autoincrement())
+  username            String              @unique
+  passwordHash        String              @map("password_hash")
+  name                String
+  phone               String?
+  role                AdminRole           @default(NORMAL)
+  status              AdminStatus         @default(ENABLED)
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  createdMerchants    Merchant[]          @relation("MerchantCreatedBy")
+  merchantAdmins      MerchantAdmin[]     @relation("MerchantAdminAdmin")
+  assignedMerchantOps MerchantAdmin[]     @relation("MerchantAdminAssignedBy")
+  statusChangeLogs    MerchantStatusLog[] @relation("MerchantStatusLogChangedBy")
+  operationLogs       OperationLog[]      @relation("OperationLogOperator")
+
+  @@map("admins")
+}
+
+model Merchant {
+  id           Int                  @id @default(autoincrement())
+  name         String
+  creditCode   String?              @map("credit_code")
+  contactName  String?              @map("contact_name")
+  contactPhone String?              @map("contact_phone")
+  address      String?
+  licenseNo    String?              @map("license_no")
+  businessType String?              @map("business_type")
+  statusId     Int                  @map("status_id")
+  remark       String?
+  createdBy    Int                  @map("created_by")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+  deletedAt    DateTime?            @map("deleted_at")
+  status       MerchantStatus       @relation(fields: [statusId], references: [id])
+  creator      Admin                @relation("MerchantCreatedBy", fields: [createdBy], references: [id])
+  fieldValues  MerchantFieldValue[]
+  admins       MerchantAdmin[]      @relation("MerchantAdminMerchant")
+  statusLogs   MerchantStatusLog[]  @relation("MerchantStatusLogMerchant")
+
+  @@map("merchants")
+}
+
+model MerchantStatus {
+  id         Int                 @id @default(autoincrement())
+  name       String
+  code       String              @unique
+  color      String?
+  sort       Int                 @default(0)
+  isEnabled  Boolean             @default(true) @map("is_enabled")
+  remark     String?
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  merchants  Merchant[]
+  fromLogs   MerchantStatusLog[] @relation("MerchantStatusLogFrom")
+  toLogs     MerchantStatusLog[] @relation("MerchantStatusLogTo")
+
+  @@map("merchant_statuses")
+}
+
+model MerchantFieldDef {
+  id           Int                @id @default(autoincrement())
+  fieldKey     String             @unique @map("field_key")
+  fieldName    String             @map("field_name")
+  fieldType    MerchantFieldType  @map("field_type")
+  isRequired   Boolean            @default(false) @map("is_required")
+  isEnabled    Boolean            @default(true) @map("is_enabled")
+  isSearchable Boolean            @default(false) @map("is_searchable")
+  defaultValue String?            @map("default_value")
+  optionsJson  Json?              @map("options_json")
+  sort         Int                @default(0)
+  remark       String?
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  fieldValues  MerchantFieldValue[]
+
+  @@map("merchant_field_defs")
+}
+
+model MerchantFieldValue {
+  id         Int              @id @default(autoincrement())
+  merchantId Int              @map("merchant_id")
+  fieldDefId Int              @map("field_def_id")
+  valueText  String?          @map("value_text")
+  valueJson  Json?            @map("value_json")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  merchant   Merchant         @relation(fields: [merchantId], references: [id])
+  fieldDef   MerchantFieldDef @relation(fields: [fieldDefId], references: [id])
+
+  @@unique([merchantId, fieldDefId], map: "uniq_merchant_field_value")
+  @@map("merchant_field_values")
+}
+
+model MerchantAdmin {
+  id         Int      @id @default(autoincrement())
+  merchantId Int      @map("merchant_id")
+  adminId    Int      @map("admin_id")
+  assignedBy Int      @map("assigned_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  merchant   Merchant @relation("MerchantAdminMerchant", fields: [merchantId], references: [id])
+  admin      Admin    @relation("MerchantAdminAdmin", fields: [adminId], references: [id])
+  assigner   Admin    @relation("MerchantAdminAssignedBy", fields: [assignedBy], references: [id])
+
+  @@unique([merchantId, adminId], map: "uniq_merchant_admin")
+  @@map("merchant_admins")
+}
+
+model MerchantStatusLog {
+  id           Int            @id @default(autoincrement())
+  merchantId   Int            @map("merchant_id")
+  fromStatusId Int?           @map("from_status_id")
+  toStatusId   Int            @map("to_status_id")
+  changedBy    Int            @map("changed_by")
+  remark       String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+  merchant     Merchant       @relation("MerchantStatusLogMerchant", fields: [merchantId], references: [id])
+  fromStatus   MerchantStatus? @relation("MerchantStatusLogFrom", fields: [fromStatusId], references: [id])
+  toStatus     MerchantStatus @relation("MerchantStatusLogTo", fields: [toStatusId], references: [id])
+  changer      Admin          @relation("MerchantStatusLogChangedBy", fields: [changedBy], references: [id])
+
+  @@map("merchant_status_logs")
+}
+
+model OperationLog {
+  id           Int      @id @default(autoincrement())
+  module       String
+  action       String
+  targetType   String   @map("target_type")
+  targetId     Int?     @map("target_id")
+  targetName   String?  @map("target_name")
+  operatorId   Int      @map("operator_id")
+  operatorName String   @map("operator_name")
+  beforeData   Json?    @map("before_data")
+  afterData    Json?    @map("after_data")
+  ip           String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  operator     Admin    @relation("OperationLogOperator", fields: [operatorId], references: [id])
+
+  @@map("operation_logs")
+}

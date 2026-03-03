@@ -270,7 +270,7 @@ const onSubmit = async () => {
 
               <el-select
                 v-else-if="field.fieldType === 'SELECT'"
-                v-model="form.customFields[field.fieldKey]"
+                v-model="form.customFields[field.fieldKey] as string"
                 style="width: 100%"
               >
                 <el-option
@@ -283,7 +283,7 @@ const onSubmit = async () => {
 
               <el-select
                 v-else-if="field.fieldType === 'MULTI_SELECT'"
-                v-model="form.customFields[field.fieldKey]"
+                v-model="form.customFields[field.fieldKey] as string[]"
                 multiple
                 style="width: 100%"
               >

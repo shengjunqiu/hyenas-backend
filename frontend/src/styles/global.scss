@@ -1,5 +1,10 @@
 :root {
   --app-bg: #f5f7fb;
+  --el-color-primary: #1677ff;
+  --el-color-success: #12b76a;
+  --el-color-warning: #f79009;
+  --el-color-danger: #f04438;
+  --el-border-radius-base: 8px;
 }
 
 * {
@@ -19,10 +24,12 @@ body,
     'Microsoft YaHei',
     sans-serif;
   background: var(--app-bg);
+  min-width: 1200px;
 }
 
 .admin-layout {
   min-height: 100vh;
+  min-width: 1200px;
 }
 
 .sidebar {
@@ -97,4 +104,14 @@ body,
 
 .login-btn {
   width: 100%;
+}
+
+#nprogress {
+  .bar {
+    background: var(--el-color-primary) !important;
+    height: 3px !important;
+  }
+  .peg {
+    box-shadow: 0 0 10px var(--el-color-primary), 0 0 5px var(--el-color-primary) !important;
+  }
 }

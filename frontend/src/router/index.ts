@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
 import { useUserStore } from '@/stores/user'
 import type { AdminRole } from '@/types'
 
@@ -73,6 +75,8 @@ const router = createRouter({
   routes,
 })
 
+NProgress.configure({ showSpinner: false })
+
 const hasRoleAccess = (to: RouteLocationNormalized, role?: AdminRole) => {
   const roles = to.meta.roles as AdminRole[] | undefined
   if (!roles?.length) {
@@ -82,10 +86,12 @@ const hasRoleAccess = (to: RouteLocationNormalized, role?: AdminRole) => {
 }
 
 router.beforeEach(async (to) => {
+  NProgress.start()
   const userStore = useUserStore()
   const requiresAuth = !!to.meta.requiresAuth || to.path !== '/login'
 
   if (!userStore.token && requiresAuth) {
+    ElMessage.warning('请先登录')
     return '/login'
   }
 
@@ -108,6 +114,14 @@ router.beforeEach(async (to) => {
   }
 
   return true
+})
+
+router.afterEach(() => {
+  NProgress.done()
+})
+
+router.onError(() => {
+  NProgress.done()
 })
 
 export default router

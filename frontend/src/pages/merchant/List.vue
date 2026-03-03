@@ -63,7 +63,7 @@ const fetchList = async () => {
 const fetchOptions = async () => {
   statuses.value = await getStatusesApi()
   if (userStore.isSuper) {
-    const res = await getAdminsApi({ page: 1, pageSize: 200 })
+    const res = await getAdminsApi({ page: 1, pageSize: 100 })
     admins.value = res.list
   }
 }

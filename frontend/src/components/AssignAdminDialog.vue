@@ -29,7 +29,7 @@ const loadData = async () => {
   loading.value = true
   try {
     const [adminRes, relationRes] = await Promise.all([
-      getAdminsApi({ page: 1, pageSize: 200 }),
+      getAdminsApi({ page: 1, pageSize: 100 }),
       getMerchantAdminsApi(props.merchantId),
     ])
     adminOptions.value = adminRes.list.filter((item) => item.role === 'NORMAL')

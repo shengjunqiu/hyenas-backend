@@ -28,7 +28,7 @@ const fetchAdmins = async () => {
   if (!userStore.isSuper) {
     return
   }
-  const res = await getAdminsApi({ page: 1, pageSize: 200 })
+  const res = await getAdminsApi({ page: 1, pageSize: 100 })
   adminOptions.value = res.list
 }
 

@@ -59,6 +59,8 @@ const onSubmit = async () => {
     visible.value = false
     resetForm()
     await userStore.logout()
+  } catch {
+    // 错误提示由请求拦截器统一处理
   } finally {
     loading.value = false
   }

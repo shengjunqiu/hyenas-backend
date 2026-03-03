@@ -12,6 +12,7 @@ import {
   Lock,
   SwitchButton,
 } from '@element-plus/icons-vue'
+import type { Component } from 'vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import { useUserStore } from '@/stores/user'
 
@@ -21,15 +22,23 @@ const userStore = useUserStore()
 const collapsed = ref(false)
 const showChangePassword = ref(false)
 
+interface MenuItem {
+  path: string
+  label: string
+  icon: Component
+  roles?: ('SUPER' | 'NORMAL')[]
+}
+
+const fullMenu: MenuItem[] = [
+  { path: '/merchants', label: '商家管理', icon: Shop },
+  { path: '/statuses', label: '状态管理', icon: SetUp, roles: ['SUPER'] },
+  { path: '/fields', label: '字段管理', icon: Document, roles: ['SUPER'] },
+  { path: '/admins', label: '管理员管理', icon: User, roles: ['SUPER'] },
+  { path: '/logs', label: '操作日志', icon: Notebook },
+]
+
 const menuItems = computed(() => {
-  const all = [
-    { path: '/merchants', label: '商家管理', icon: Shop },
-    { path: '/statuses', label: '状态管理', icon: SetUp, roles: ['SUPER'] },
-    { path: '/fields', label: '字段管理', icon: Document, roles: ['SUPER'] },
-    { path: '/admins', label: '管理员管理', icon: User, roles: ['SUPER'] },
-    { path: '/logs', label: '操作日志', icon: Notebook },
-  ]
-  return all.filter((item) => {
+  return fullMenu.filter((item) => {
     if (!item.roles) {
       return true
     }
@@ -39,9 +48,10 @@ const menuItems = computed(() => {
 
 const activePath = computed(() => route.path)
 
-const breadcrumb = computed(() => {
-  const current = menuItems.value.find((item) => route.path.startsWith(item.path))
-  return current?.label ?? '工作台'
+const breadcrumbs = computed(() => {
+  return route.matched
+    .filter((matched) => !!matched.meta?.title)
+    .map((matched) => matched.meta.title as string)
 })
 
 const onLogout = async () => {
@@ -80,7 +90,9 @@ const onMenuSelect = (path: string) => {
           </el-button>
           <el-breadcrumb separator="/">
             <el-breadcrumb-item>首页</el-breadcrumb-item>
-            <el-breadcrumb-item>{{ breadcrumb }}</el-breadcrumb-item>
+            <el-breadcrumb-item v-for="name in breadcrumbs" :key="name">
+              {{ name }}
+            </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
 

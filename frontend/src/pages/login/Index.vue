@@ -33,6 +33,8 @@ const onSubmit = async () => {
     await userStore.login(form.username, form.password)
     ElMessage.success('登录成功')
     await router.replace('/')
+  } catch {
+    // 错误提示由请求拦截器统一处理
   } finally {
     loading.value = false
   }

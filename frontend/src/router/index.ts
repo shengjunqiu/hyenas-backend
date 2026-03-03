@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import type { AdminRole } from '@/types'
 
@@ -102,6 +103,7 @@ router.beforeEach(async (to) => {
   }
 
   if (!hasRoleAccess(to, userStore.user?.role)) {
+    ElMessage.warning('无访问权限')
     return '/'
   }
 

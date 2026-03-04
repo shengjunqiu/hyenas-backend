@@ -10,6 +10,7 @@ import {
 } from '@/api/merchant'
 import { getFieldsApi } from '@/api/field'
 import { getStatusesApi } from '@/api/status'
+import { SUPERVISION_AGENCIES } from '@/constants/supervision-agencies'
 
 const route = useRoute()
 const router = useRouter()
@@ -217,7 +218,14 @@ const onSubmit = async () => {
           </el-col>
           <el-col :span="12">
             <el-form-item label="日常监督管理机构">
-              <el-input v-model="form.supervisionAgency" />
+              <el-select v-model="form.supervisionAgency" clearable style="width: 100%">
+                <el-option
+                  v-for="item in SUPERVISION_AGENCIES"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">

@@ -389,10 +389,7 @@ export class MerchantService {
       };
     }
     if (query.supervisionAgency?.trim()) {
-      where.supervisionAgency = {
-        contains: query.supervisionAgency.trim(),
-        mode: 'insensitive',
-      };
+      where.supervisionAgency = query.supervisionAgency.trim();
     }
 
     if (query.createdAtStart || query.createdAtEnd) {

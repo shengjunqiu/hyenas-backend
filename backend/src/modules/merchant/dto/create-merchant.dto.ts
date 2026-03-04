@@ -2,11 +2,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsInt,
+  IsIn,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
 } from 'class-validator';
+import { SUPERVISION_AGENCIES } from '../constants/supervision-agencies';
 
 export class CreateMerchantDto {
   @ApiProperty({ description: '经营者名称' })
@@ -34,9 +36,15 @@ export class CreateMerchantDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional({ description: '日常监督管理机构' })
+  @ApiPropertyOptional({
+    description: '日常监督管理机构',
+    enum: SUPERVISION_AGENCIES,
+  })
   @IsOptional()
   @IsString()
+  @IsIn([...SUPERVISION_AGENCIES], {
+    message: `日常监督管理机构必须是以下值之一：${SUPERVISION_AGENCIES.join('、')}`,
+  })
   supervisionAgency?: string;
 
   @ApiPropertyOptional({ description: '许可证编号' })

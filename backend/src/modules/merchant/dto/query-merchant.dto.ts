@@ -3,11 +3,13 @@ import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   Max,
   Min,
 } from 'class-validator';
+import { SUPERVISION_AGENCIES } from '../constants/supervision-agencies';
 
 export class QueryMerchantDto {
   @ApiPropertyOptional({ description: '经营者名称' })
@@ -36,9 +38,15 @@ export class QueryMerchantDto {
   @IsString()
   businessType?: string;
 
-  @ApiPropertyOptional({ description: '日常监督管理机构' })
+  @ApiPropertyOptional({
+    description: '日常监督管理机构',
+    enum: SUPERVISION_AGENCIES,
+  })
   @IsOptional()
   @IsString()
+  @IsIn([...SUPERVISION_AGENCIES], {
+    message: `日常监督管理机构必须是以下值之一：${SUPERVISION_AGENCIES.join('、')}`,
+  })
   supervisionAgency?: string;
 
   @ApiPropertyOptional({ description: '管理员 ID（SUPER 可用）' })

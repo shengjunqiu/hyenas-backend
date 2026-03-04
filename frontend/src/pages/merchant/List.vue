@@ -7,6 +7,7 @@ import type { Admin, Merchant, MerchantStatus } from '@/types'
 import { deleteMerchantApi, getMerchantsApi } from '@/api/merchant'
 import { getAdminsApi } from '@/api/admin'
 import { getStatusesApi } from '@/api/status'
+import { SUPERVISION_AGENCIES } from '@/constants/supervision-agencies'
 import AssignAdminDialog from '@/components/AssignAdminDialog.vue'
 import ChangeStatusDialog from '@/components/ChangeStatusDialog.vue'
 
@@ -132,7 +133,14 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
         <el-input v-model="query.businessType" placeholder="请输入" clearable />
       </el-form-item>
       <el-form-item label="日常监督管理机构">
-        <el-input v-model="query.supervisionAgency" placeholder="请输入" clearable />
+        <el-select
+          v-model="query.supervisionAgency"
+          clearable
+          placeholder="请选择"
+          style="width: 260px"
+        >
+          <el-option v-for="item in SUPERVISION_AGENCIES" :key="item" :label="item" :value="item" />
+        </el-select>
       </el-form-item>
       <el-form-item v-if="userStore.isSuper" label="分配管理员">
         <el-select v-model="query.adminId" clearable placeholder="请选择" style="width: 180px">

@@ -88,6 +88,7 @@ export interface Merchant {
   contactName?: string | null
   contactPhone?: string | null
   address?: string | null
+  supervisionAgency?: string | null
   licenseNo?: string | null
   businessType?: string | null
   statusId: number

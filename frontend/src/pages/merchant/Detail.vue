@@ -50,19 +50,24 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
     <el-card shadow="never">
       <template #header>基础信息</template>
       <el-descriptions :column="2" border>
-        <el-descriptions-item label="商家名称">{{ detail?.name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="经营者名称">{{ detail?.name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="统一社会信用代码">{{
           detail?.creditCode || '-'
         }}</el-descriptions-item>
-        <el-descriptions-item label="联系人">{{ detail?.contactName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="联系电话">{{
+        <el-descriptions-item label="法定代表人（负责人）">{{
+          detail?.contactName || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="法定代表人联系方式">{{
           detail?.contactPhone || '-'
         }}</el-descriptions-item>
-        <el-descriptions-item label="经营地址">{{ detail?.address || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="经营场所">{{ detail?.address || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="日常监督管理机构">{{
+          detail?.supervisionAgency || '-'
+        }}</el-descriptions-item>
         <el-descriptions-item label="许可证编号">{{
           detail?.licenseNo || '-'
         }}</el-descriptions-item>
-        <el-descriptions-item label="经营类型">{{
+        <el-descriptions-item label="餐饮类型">{{
           detail?.businessType || '-'
         }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ detail?.status?.name || '-' }}</el-descriptions-item>

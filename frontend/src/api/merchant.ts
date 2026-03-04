@@ -7,6 +7,7 @@ export interface QueryMerchantParams {
   contactPhone?: string
   statusId?: number
   businessType?: string
+  supervisionAgency?: string
   adminId?: number
   createdAtStart?: string
   createdAtEnd?: string
@@ -20,6 +21,7 @@ export interface MerchantPayload {
   contactName?: string
   contactPhone?: string
   address?: string
+  supervisionAgency?: string
   licenseNo?: string
   businessType?: string
   statusId?: number

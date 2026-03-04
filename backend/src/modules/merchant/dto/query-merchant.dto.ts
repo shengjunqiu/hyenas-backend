@@ -10,17 +10,17 @@ import {
 } from 'class-validator';
 
 export class QueryMerchantDto {
-  @ApiPropertyOptional({ description: '商家名称' })
+  @ApiPropertyOptional({ description: '经营者名称' })
   @IsOptional()
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ description: '联系人' })
+  @ApiPropertyOptional({ description: '法定代表人（负责人）' })
   @IsOptional()
   @IsString()
   contactName?: string;
 
-  @ApiPropertyOptional({ description: '联系电话' })
+  @ApiPropertyOptional({ description: '法定代表人联系方式' })
   @IsOptional()
   @IsString()
   contactPhone?: string;
@@ -31,10 +31,15 @@ export class QueryMerchantDto {
   @IsInt()
   statusId?: number;
 
-  @ApiPropertyOptional({ description: '经营类型' })
+  @ApiPropertyOptional({ description: '餐饮类型' })
   @IsOptional()
   @IsString()
   businessType?: string;
+
+  @ApiPropertyOptional({ description: '日常监督管理机构' })
+  @IsOptional()
+  @IsString()
+  supervisionAgency?: string;
 
   @ApiPropertyOptional({ description: '管理员 ID（SUPER 可用）' })
   @Type(() => Number)

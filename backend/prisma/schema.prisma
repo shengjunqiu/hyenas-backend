@@ -65,6 +65,7 @@ model Merchant {
   contactName  String?              @map("contact_name")
   contactPhone String?              @map("contact_phone")
   address      String?
+  supervisionAgency String?         @map("supervision_agency")
   licenseNo    String?              @map("license_no")
   businessType String?              @map("business_type")
   statusId     Int                  @map("status_id")

@@ -28,6 +28,7 @@ const form = reactive({
   contactName: '',
   contactPhone: '',
   address: '',
+  supervisionAgency: '',
   licenseNo: '',
   businessType: '',
   statusId: undefined as number | undefined,
@@ -39,7 +40,7 @@ const enabledStatuses = computed(() => statuses.value.filter((item) => item.isEn
 const enabledFields = computed(() => fields.value.filter((item) => item.isEnabled))
 
 const rules = {
-  name: [{ required: true, message: '请输入商家名称', trigger: 'blur' }],
+  name: [{ required: true, message: '请输入经营者名称', trigger: 'blur' }],
   statusId: [{ required: true, message: '请选择状态', trigger: 'change' }],
 }
 
@@ -106,6 +107,7 @@ const fetchDetail = async () => {
   form.contactName = detail.contactName || ''
   form.contactPhone = detail.contactPhone || ''
   form.address = detail.address || ''
+  form.supervisionAgency = detail.supervisionAgency || ''
   form.licenseNo = detail.licenseNo || ''
   form.businessType = detail.businessType || ''
   form.statusId = detail.statusId
@@ -133,6 +135,7 @@ const buildPayload = () => ({
   contactName: form.contactName || undefined,
   contactPhone: form.contactPhone || undefined,
   address: form.address || undefined,
+  supervisionAgency: form.supervisionAgency || undefined,
   licenseNo: form.licenseNo || undefined,
   businessType: form.businessType || undefined,
   statusId: form.statusId,
@@ -178,7 +181,7 @@ const onSubmit = async () => {
 
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="商家名称" prop="name">
+            <el-form-item label="经营者名称" prop="name">
               <el-input v-model="form.name" />
             </el-form-item>
           </el-col>
@@ -188,17 +191,17 @@ const onSubmit = async () => {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="联系人">
+            <el-form-item label="法定代表人（负责人）">
               <el-input v-model="form.contactName" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="联系电话">
+            <el-form-item label="法定代表人联系方式">
               <el-input v-model="form.contactPhone" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="经营地址">
+            <el-form-item label="经营场所">
               <el-input v-model="form.address" />
             </el-form-item>
           </el-col>
@@ -208,12 +211,17 @@ const onSubmit = async () => {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="经营类型">
+            <el-form-item label="餐饮类型">
               <el-input v-model="form.businessType" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="当前状态" prop="statusId">
+            <el-form-item label="日常监督管理机构">
+              <el-input v-model="form.supervisionAgency" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态" prop="statusId">
               <el-select v-model="form.statusId" style="width: 100%">
                 <el-option
                   v-for="item in enabledStatuses"
@@ -225,7 +233,7 @@ const onSubmit = async () => {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="备注说明">
+            <el-form-item label="备注">
               <el-input v-model="form.remark" type="textarea" :rows="3" />
             </el-form-item>
           </el-col>

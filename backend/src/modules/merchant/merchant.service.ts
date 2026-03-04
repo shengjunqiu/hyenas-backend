@@ -131,6 +131,7 @@ export class MerchantService {
         contactName: dto.contactName,
         contactPhone: dto.contactPhone,
         address: dto.address,
+        supervisionAgency: dto.supervisionAgency,
         licenseNo: dto.licenseNo,
         businessType: dto.businessType,
         statusId: dto.statusId,
@@ -180,6 +181,7 @@ export class MerchantService {
         contactName: dto.contactName,
         contactPhone: dto.contactPhone,
         address: dto.address,
+        supervisionAgency: dto.supervisionAgency,
         licenseNo: dto.licenseNo,
         businessType: dto.businessType,
         statusId: dto.statusId,
@@ -383,6 +385,12 @@ export class MerchantService {
     if (query.businessType?.trim()) {
       where.businessType = {
         contains: query.businessType.trim(),
+        mode: 'insensitive',
+      };
+    }
+    if (query.supervisionAgency?.trim()) {
+      where.supervisionAgency = {
+        contains: query.supervisionAgency.trim(),
         mode: 'insensitive',
       };
     }
@@ -680,6 +688,7 @@ export class MerchantService {
       contactName: merchant.contactName,
       contactPhone: merchant.contactPhone,
       address: merchant.address,
+      supervisionAgency: merchant.supervisionAgency,
       licenseNo: merchant.licenseNo,
       businessType: merchant.businessType,
       statusId: merchant.statusId,

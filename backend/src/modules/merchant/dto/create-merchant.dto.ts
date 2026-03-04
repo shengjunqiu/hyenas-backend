@@ -9,9 +9,9 @@ import {
 } from 'class-validator';
 
 export class CreateMerchantDto {
-  @ApiProperty({ description: '商家名称' })
+  @ApiProperty({ description: '经营者名称' })
   @IsString()
-  @IsNotEmpty({ message: '商家名称不能为空' })
+  @IsNotEmpty({ message: '经营者名称不能为空' })
   name: string;
 
   @ApiPropertyOptional({ description: '统一社会信用代码' })
@@ -19,27 +19,32 @@ export class CreateMerchantDto {
   @IsString()
   creditCode?: string;
 
-  @ApiPropertyOptional({ description: '联系人' })
+  @ApiPropertyOptional({ description: '法定代表人（负责人）' })
   @IsOptional()
   @IsString()
   contactName?: string;
 
-  @ApiPropertyOptional({ description: '联系电话' })
+  @ApiPropertyOptional({ description: '法定代表人联系方式' })
   @IsOptional()
   @IsString()
   contactPhone?: string;
 
-  @ApiPropertyOptional({ description: '经营地址' })
+  @ApiPropertyOptional({ description: '经营场所' })
   @IsOptional()
   @IsString()
   address?: string;
+
+  @ApiPropertyOptional({ description: '日常监督管理机构' })
+  @IsOptional()
+  @IsString()
+  supervisionAgency?: string;
 
   @ApiPropertyOptional({ description: '许可证编号' })
   @IsOptional()
   @IsString()
   licenseNo?: string;
 
-  @ApiPropertyOptional({ description: '经营类型' })
+  @ApiPropertyOptional({ description: '餐饮类型' })
   @IsOptional()
   @IsString()
   businessType?: string;

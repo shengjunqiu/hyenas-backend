@@ -24,6 +24,7 @@ const query = reactive({
   contactPhone: '',
   statusId: undefined as number | undefined,
   businessType: '',
+  supervisionAgency: '',
   adminId: undefined as number | undefined,
   dateRange: [] as string[],
   page: 1,
@@ -46,6 +47,7 @@ const fetchList = async () => {
       contactPhone: query.contactPhone || undefined,
       statusId: query.statusId,
       businessType: query.businessType || undefined,
+      supervisionAgency: query.supervisionAgency || undefined,
       adminId: userStore.isSuper ? query.adminId : undefined,
       createdAtStart: query.dateRange[0],
       createdAtEnd: query.dateRange[1],
@@ -79,6 +81,7 @@ const onReset = async () => {
   query.contactPhone = ''
   query.statusId = undefined
   query.businessType = ''
+  query.supervisionAgency = ''
   query.adminId = undefined
   query.dateRange = []
   query.page = 1
@@ -111,13 +114,13 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
 <template>
   <div class="page-block">
     <el-form :inline="true" class="filter-form">
-      <el-form-item label="商家名称">
+      <el-form-item label="经营者名称">
         <el-input v-model="query.name" placeholder="请输入" clearable />
       </el-form-item>
-      <el-form-item label="联系人">
+      <el-form-item label="法定代表人（负责人）">
         <el-input v-model="query.contactName" placeholder="请输入" clearable />
       </el-form-item>
-      <el-form-item label="联系电话">
+      <el-form-item label="法定代表人联系方式">
         <el-input v-model="query.contactPhone" placeholder="请输入" clearable />
       </el-form-item>
       <el-form-item label="商家状态">
@@ -125,8 +128,11 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
           <el-option v-for="item in statuses" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="经营类型">
+      <el-form-item label="餐饮类型">
         <el-input v-model="query.businessType" placeholder="请输入" clearable />
+      </el-form-item>
+      <el-form-item label="日常监督管理机构">
+        <el-input v-model="query.supervisionAgency" placeholder="请输入" clearable />
       </el-form-item>
       <el-form-item v-if="userStore.isSuper" label="分配管理员">
         <el-select v-model="query.adminId" clearable placeholder="请选择" style="width: 180px">
@@ -162,9 +168,9 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
 
     <el-table v-loading="loading" :data="list" border>
       <template #empty>暂无数据</template>
-      <el-table-column prop="name" label="商家名称" min-width="180" />
-      <el-table-column prop="contactName" label="联系人" min-width="120" />
-      <el-table-column prop="contactPhone" label="联系电话" min-width="140" />
+      <el-table-column prop="name" label="经营者名称" min-width="180" />
+      <el-table-column prop="contactName" label="法定代表人（负责人）" min-width="150" />
+      <el-table-column prop="contactPhone" label="法定代表人联系方式" min-width="160" />
       <el-table-column label="商家状态" min-width="140">
         <template #default="{ row }">
           <el-tag :color="statusMap.get(row.statusId)?.color || '#d9d9d9'" effect="light">
@@ -172,7 +178,8 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="businessType" label="经营类型" min-width="140" />
+      <el-table-column prop="businessType" label="餐饮类型" min-width="140" />
+      <el-table-column prop="supervisionAgency" label="日常监督管理机构" min-width="180" />
       <el-table-column label="分配管理员" min-width="180">
         <template #default="{ row }">
           {{ row.admins?.map((item: { admin: Admin }) => item.admin.name).join('，') || '-' }}

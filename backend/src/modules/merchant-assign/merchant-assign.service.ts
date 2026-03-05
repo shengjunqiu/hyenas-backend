@@ -11,6 +11,98 @@ import type { CurrentUser } from '../auth/interfaces/current-user.interface';
 export class MerchantAssignService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async batchAssignAdmins(
+    merchantIds: number[],
+    adminIds: number[],
+    operator: CurrentUser,
+  ) {
+    const uniqueMerchantIds = [...new Set(merchantIds)];
+    const uniqueAdminIds = [...new Set(adminIds)];
+
+    if (uniqueMerchantIds.length !== merchantIds.length) {
+      throw new BadRequestException('merchantIds 存在重复项');
+    }
+    if (uniqueAdminIds.length !== adminIds.length) {
+      throw new BadRequestException('adminIds 存在重复项');
+    }
+
+    const merchants = await this.prisma.merchant.findMany({
+      where: {
+        id: { in: uniqueMerchantIds },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (merchants.length !== uniqueMerchantIds.length) {
+      throw new BadRequestException('存在无效的商家 ID');
+    }
+
+    const admins = await this.prisma.admin.findMany({
+      where: { id: { in: uniqueAdminIds } },
+    });
+    if (admins.length !== uniqueAdminIds.length) {
+      throw new BadRequestException('存在无效的管理员 ID');
+    }
+
+    const invalid = admins.find((item) => item.role !== AdminRole.NORMAL);
+    if (invalid) {
+      throw new BadRequestException('只能分配普通管理员');
+    }
+
+    const existingRelations = await this.prisma.merchantAdmin.findMany({
+      where: {
+        merchantId: { in: uniqueMerchantIds },
+        adminId: { in: uniqueAdminIds },
+      },
+      select: { merchantId: true, adminId: true },
+    });
+    const existingKeySet = new Set(
+      existingRelations.map((item) => `${item.merchantId}-${item.adminId}`),
+    );
+
+    const toCreate: Array<{ merchantId: number; adminId: number; assignedBy: number }> = [];
+    for (const merchantId of uniqueMerchantIds) {
+      for (const adminId of uniqueAdminIds) {
+        if (!existingKeySet.has(`${merchantId}-${adminId}`)) {
+          toCreate.push({ merchantId, adminId, assignedBy: operator.id });
+        }
+      }
+    }
+
+    if (toCreate.length > 0) {
+      await this.prisma.$transaction([
+        this.prisma.merchantAdmin.createMany({
+          data: toCreate,
+          skipDuplicates: true,
+        }),
+        this.prisma.operationLog.create({
+          data: {
+            module: 'MERCHANT_ASSIGN',
+            action: 'BATCH_ASSIGN_ADMINS',
+            targetType: 'MERCHANT',
+            operatorId: operator.id,
+            operatorName: operator.name,
+            afterData: {
+              merchantIds: uniqueMerchantIds,
+              adminIds: uniqueAdminIds,
+              createdCount: toCreate.length,
+            } as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+    }
+
+    const totalPairs = uniqueMerchantIds.length * uniqueAdminIds.length;
+    const createdCount = toCreate.length;
+    return {
+      merchantCount: uniqueMerchantIds.length,
+      adminCount: uniqueAdminIds.length,
+      totalPairs,
+      createdCount,
+      skippedCount: totalPairs - createdCount,
+    };
+  }
+
   async getMerchantAdmins(merchantId: number) {
     await this.ensureMerchantExists(merchantId);
 

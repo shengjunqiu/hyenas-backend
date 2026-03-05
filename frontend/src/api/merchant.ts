@@ -48,6 +48,19 @@ export interface AssignAdminsPayload {
   adminIds: number[]
 }
 
+export interface BatchAssignAdminsPayload {
+  merchantIds: number[]
+  adminIds: number[]
+}
+
+export interface BatchAssignAdminsResult {
+  merchantCount: number
+  adminCount: number
+  totalPairs: number
+  createdCount: number
+  skippedCount: number
+}
+
 export interface MerchantAdminRelation {
   id: number
   merchantId: number
@@ -91,6 +104,9 @@ export const getMerchantAdminsApi = (id: number) =>
 
 export const assignMerchantAdminsApi = (id: number, payload: AssignAdminsPayload) =>
   post<MerchantAdminRelation[]>(`/merchants/${id}/assign-admins`, payload)
+
+export const batchAssignMerchantAdminsApi = (payload: BatchAssignAdminsPayload) =>
+  post<BatchAssignAdminsResult>('/merchants/batch-assign-admins', payload)
 
 export const unassignMerchantAdminApi = (id: number, adminId: number) =>
   del<null>(`/merchants/${id}/admins/${adminId}`)

@@ -9,6 +9,7 @@ import { getAdminsApi } from '@/api/admin'
 import { getStatusesApi } from '@/api/status'
 import { SUPERVISION_AGENCIES } from '@/constants/supervision-agencies'
 import AssignAdminDialog from '@/components/AssignAdminDialog.vue'
+import BatchAssignAdminDialog from '@/components/BatchAssignAdminDialog.vue'
 import ChangeStatusDialog from '@/components/ChangeStatusDialog.vue'
 
 const router = useRouter()
@@ -33,9 +34,11 @@ const query = reactive({
 })
 
 const showAssignDialog = ref(false)
+const showBatchAssignDialog = ref(false)
 const showStatusDialog = ref(false)
 const currentMerchantId = ref<number>(0)
 const currentStatusId = ref<number | undefined>(undefined)
+const selectedMerchantIds = ref<number[]>([])
 
 const statusMap = computed(() => new Map(statuses.value.map((s) => [s.id, s])))
 
@@ -103,10 +106,22 @@ const openAssign = (row: Merchant) => {
   showAssignDialog.value = true
 }
 
+const openBatchAssign = () => {
+  if (!selectedMerchantIds.value.length) {
+    ElMessage.warning('请先选择商户')
+    return
+  }
+  showBatchAssignDialog.value = true
+}
+
 const openChangeStatus = (row: Merchant) => {
   currentMerchantId.value = row.id
   currentStatusId.value = row.statusId
   showStatusDialog.value = true
+}
+
+const onSelectionChange = (rows: Merchant[]) => {
+  selectedMerchantIds.value = rows.map((item) => item.id)
 }
 
 const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm') : '-')
@@ -172,10 +187,19 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       <el-button v-role="'SUPER'" type="primary" @click="router.push('/merchants/create')">
         新增商家
       </el-button>
+      <el-button
+        v-role="'SUPER'"
+        style="margin-left: 8px"
+        @click="openBatchAssign"
+        :disabled="!selectedMerchantIds.length"
+      >
+        批量分配管理员
+      </el-button>
     </div>
 
-    <el-table v-loading="loading" :data="list" border>
+    <el-table v-loading="loading" :data="list" border @selection-change="onSelectionChange">
       <template #empty>暂无数据</template>
+      <el-table-column v-if="userStore.isSuper" type="selection" width="48" />
       <el-table-column prop="name" label="经营者名称" min-width="180" />
       <el-table-column prop="contactName" label="法定代表人（负责人）" min-width="150" />
       <el-table-column prop="contactPhone" label="法定代表人联系方式" min-width="160" />
@@ -235,6 +259,11 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       v-model="showAssignDialog"
       :merchant-id="currentMerchantId"
       @update:model-value="fetchList"
+    />
+    <BatchAssignAdminDialog
+      v-model="showBatchAssignDialog"
+      :merchant-ids="selectedMerchantIds"
+      @success="fetchList"
     />
 
     <ChangeStatusDialog

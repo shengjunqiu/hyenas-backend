@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { CurrentUser as CurrentUserInfo } from '../auth/interfaces/current-user.interface';
 import { AssignAdminsDto } from './dto/assign-admins.dto';
+import { BatchAssignAdminsDto } from './dto/batch-assign-admins.dto';
 import { MerchantAssignService } from './merchant-assign.service';
 
 @ApiTags('Merchant Assign')
@@ -25,6 +26,19 @@ import { MerchantAssignService } from './merchant-assign.service';
 @Controller()
 export class MerchantAssignController {
   constructor(private readonly merchantAssignService: MerchantAssignService) {}
+
+  @Post('merchants/batch-assign-admins')
+  @ApiOperation({ summary: '批量给多个商家分配管理员（可多个）' })
+  batchAssignAdmins(
+    @Body() dto: BatchAssignAdminsDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.batchAssignAdmins(
+      dto.merchantIds,
+      dto.adminIds,
+      user,
+    );
+  }
 
   @Get('merchants/:id/admins')
   @ApiOperation({ summary: '查看商家已分配管理员' })

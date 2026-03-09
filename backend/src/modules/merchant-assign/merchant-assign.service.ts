@@ -1,9 +1,10 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AdminRole, Prisma } from '@prisma/client';
+import { Admin, AdminRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../auth/interfaces/current-user.interface';
 
@@ -26,28 +27,8 @@ export class MerchantAssignService {
       throw new BadRequestException('adminIds 存在重复项');
     }
 
-    const merchants = await this.prisma.merchant.findMany({
-      where: {
-        id: { in: uniqueMerchantIds },
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-    if (merchants.length !== uniqueMerchantIds.length) {
-      throw new BadRequestException('存在无效的商家 ID');
-    }
-
-    const admins = await this.prisma.admin.findMany({
-      where: { id: { in: uniqueAdminIds } },
-    });
-    if (admins.length !== uniqueAdminIds.length) {
-      throw new BadRequestException('存在无效的管理员 ID');
-    }
-
-    const invalid = admins.find((item) => item.role !== AdminRole.NORMAL);
-    if (invalid) {
-      throw new BadRequestException('只能分配普通管理员');
-    }
+    await this.ensureMerchantsAssignable(uniqueMerchantIds, operator);
+    await this.ensureTargetAdminsAssignable(uniqueAdminIds, operator);
 
     const existingRelations = await this.prisma.merchantAdmin.findMany({
       where: {
@@ -103,8 +84,8 @@ export class MerchantAssignService {
     };
   }
 
-  async getMerchantAdmins(merchantId: number) {
-    await this.ensureMerchantExists(merchantId);
+  async getMerchantAdmins(merchantId: number, operator: CurrentUser) {
+    await this.ensureMerchantAssignable(merchantId, operator);
 
     const relations = await this.prisma.merchantAdmin.findMany({
       where: { merchantId },
@@ -138,23 +119,13 @@ export class MerchantAssignService {
     adminIds: number[],
     operator: CurrentUser,
   ) {
-    await this.ensureMerchantExists(merchantId);
+    await this.ensureMerchantAssignable(merchantId, operator);
     const uniqueAdminIds = [...new Set(adminIds)];
     if (uniqueAdminIds.length !== adminIds.length) {
       throw new BadRequestException('adminIds 存在重复项');
     }
 
-    const admins = await this.prisma.admin.findMany({
-      where: { id: { in: uniqueAdminIds } },
-    });
-    if (admins.length !== uniqueAdminIds.length) {
-      throw new BadRequestException('存在无效的管理员 ID');
-    }
-
-    const invalid = admins.find((item) => item.role !== AdminRole.NORMAL);
-    if (invalid) {
-      throw new BadRequestException('只能分配普通管理员');
-    }
+    await this.ensureTargetAdminsAssignable(uniqueAdminIds, operator);
 
     const existingRelations = await this.prisma.merchantAdmin.findMany({
       where: {
@@ -193,7 +164,7 @@ export class MerchantAssignService {
       }),
     ]);
 
-    return this.getMerchantAdmins(merchantId);
+    return this.getMerchantAdmins(merchantId, operator);
   }
 
   async unassignAdmin(
@@ -201,13 +172,17 @@ export class MerchantAssignService {
     adminId: number,
     operator: CurrentUser,
   ) {
-    await this.ensureMerchantExists(merchantId);
+    await this.ensureMerchantAssignable(merchantId, operator);
     const relation = await this.prisma.merchantAdmin.findFirst({
       where: { merchantId, adminId },
+      include: {
+        admin: true,
+      },
     });
     if (!relation) {
       throw new NotFoundException('分配关系不存在');
     }
+    await this.ensureTargetAdminAssignable(relation.admin, operator);
 
     await this.prisma.$transaction([
       this.prisma.merchantAdmin.delete({
@@ -229,7 +204,7 @@ export class MerchantAssignService {
     return null;
   }
 
-  async getAdminMerchants(adminId: number) {
+  async getAdminMerchants(adminId: number, operator: CurrentUser) {
     const admin = await this.prisma.admin.findUnique({
       where: { id: adminId },
     });
@@ -239,6 +214,7 @@ export class MerchantAssignService {
     if (admin.role !== AdminRole.NORMAL) {
       throw new BadRequestException('仅支持查询普通管理员负责商家');
     }
+    await this.ensureTargetAdminAssignable(admin, operator);
 
     const relations = await this.prisma.merchantAdmin.findMany({
       where: { adminId },
@@ -268,5 +244,62 @@ export class MerchantAssignService {
       throw new NotFoundException('商家不存在');
     }
     return merchant;
+  }
+
+  private async ensureMerchantsAssignable(
+    merchantIds: number[],
+    operator: CurrentUser,
+  ) {
+    for (const merchantId of merchantIds) {
+      await this.ensureMerchantAssignable(merchantId, operator);
+    }
+  }
+
+  private async ensureMerchantAssignable(
+    merchantId: number,
+    operator: CurrentUser,
+  ) {
+    await this.ensureMerchantExists(merchantId);
+
+    if (operator.role === AdminRole.SUPER) {
+      return;
+    }
+
+    const relation = await this.prisma.merchantAdmin.findFirst({
+      where: { merchantId, adminId: operator.id },
+    });
+    if (!relation) {
+      throw new ForbiddenException('只能分配自己负责的商家');
+    }
+  }
+
+  private async ensureTargetAdminsAssignable(
+    adminIds: number[],
+    operator: CurrentUser,
+  ) {
+    const admins = await this.prisma.admin.findMany({
+      where: { id: { in: adminIds } },
+    });
+    if (admins.length !== adminIds.length) {
+      throw new BadRequestException('存在无效的管理员 ID');
+    }
+
+    for (const admin of admins) {
+      await this.ensureTargetAdminAssignable(admin, operator);
+    }
+  }
+
+  private async ensureTargetAdminAssignable(admin: Admin, operator: CurrentUser) {
+    if (admin.role !== AdminRole.NORMAL) {
+      throw new BadRequestException('只能分配普通管理员');
+    }
+
+    if (operator.role === AdminRole.SUPER) {
+      return;
+    }
+
+    if (admin.parentAdminId !== operator.id) {
+      throw new ForbiddenException('只能将商家分配给自己的子管理员');
+    }
   }
 }

@@ -8,8 +8,10 @@ import {
   type MerchantAdminRelation,
 } from '@/api/merchant'
 import type { Admin } from '@/types'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps<{ merchantId: number }>()
+const userStore = useUserStore()
 const visible = defineModel<boolean>({ required: true })
 const loading = ref(false)
 const adminOptions = ref<Admin[]>([])
@@ -81,7 +83,7 @@ const onUnassign = async (adminId: number) => {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="分配管理员" width="560px">
+  <el-dialog v-model="visible" :title="userStore.isSuper ? '分配管理员' : '分配子管理员'" width="560px">
     <div v-loading="loading">
       <el-space wrap>
         <el-tag
@@ -103,7 +105,7 @@ const onUnassign = async (adminId: number) => {
             multiple
             collapse-tags
             collapse-tags-tooltip
-            placeholder="请选择普通管理员"
+            :placeholder="userStore.isSuper ? '请选择普通管理员' : '请选择子管理员'"
             style="width: 100%"
           >
             <el-option

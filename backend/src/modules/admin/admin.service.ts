@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -18,7 +19,11 @@ export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   async queryAdmins(query: QueryAdminDto) {
-    const where = this.buildWhere(query);
+    return this.queryAdminsByOperator(query, null);
+  }
+
+  async queryAdminsByOperator(query: QueryAdminDto, operator: CurrentUser | null) {
+    const where = this.buildWhere(query, operator);
     const { page, pageSize } = query;
     const skip = (page - 1) * pageSize;
 
@@ -30,6 +35,13 @@ export class AdminService {
         skip,
         take: pageSize,
         include: {
+          parentAdmin: {
+            select: {
+              id: true,
+              username: true,
+              name: true,
+            },
+          },
           _count: {
             select: {
               merchantAdmins: true,
@@ -47,6 +59,8 @@ export class AdminService {
         phone: item.phone,
         role: item.role,
         status: item.status,
+        parentAdminId: item.parentAdminId,
+        parentAdmin: item.parentAdmin,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         merchantCount: item._count.merchantAdmins,
@@ -60,6 +74,7 @@ export class AdminService {
   }
 
   async createAdmin(dto: CreateAdminDto, operator: CurrentUser) {
+    const data = await this.buildCreateData(dto, operator);
     const existing = await this.prisma.admin.findUnique({
       where: { username: dto.username },
     });
@@ -67,16 +82,8 @@ export class AdminService {
       throw new BadRequestException('用户名已存在');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
     const created = await this.prisma.admin.create({
-      data: {
-        username: dto.username,
-        passwordHash,
-        name: dto.name,
-        phone: dto.phone,
-        role: dto.role,
-        status: AdminStatus.ENABLED,
-      },
+      data,
     });
 
     await this.writeOperationLog({
@@ -91,6 +98,11 @@ export class AdminService {
 
   async updateAdmin(id: number, dto: UpdateAdminDto, operator: CurrentUser) {
     const existing = await this.findAdminOrThrow(id);
+    await this.ensureAdminManageable(existing, operator);
+
+    if (operator.role !== AdminRole.SUPER && dto.role !== undefined) {
+      throw new ForbiddenException('无权修改管理员角色');
+    }
     if (
       existing.role === AdminRole.SUPER &&
       dto.role === AdminRole.NORMAL &&
@@ -105,6 +117,10 @@ export class AdminService {
         name: dto.name,
         phone: dto.phone,
         role: dto.role,
+        parentAdminId:
+          operator.role === AdminRole.SUPER && dto.role === AdminRole.SUPER
+            ? null
+            : undefined,
       },
     });
 
@@ -125,6 +141,7 @@ export class AdminService {
     operator: CurrentUser,
   ) {
     const existing = await this.findAdminOrThrow(id);
+    await this.ensureAdminManageable(existing, operator);
 
     if (
       existing.role === AdminRole.SUPER &&
@@ -156,6 +173,7 @@ export class AdminService {
     operator: CurrentUser,
   ) {
     const existing = await this.findAdminOrThrow(id);
+    await this.ensureAdminManageable(existing, operator);
     const passwordHash = await bcrypt.hash(dto.newPassword, 10);
 
     await this.prisma.admin.update({
@@ -173,8 +191,15 @@ export class AdminService {
     return null;
   }
 
-  private buildWhere(query: QueryAdminDto): Prisma.AdminWhereInput {
+  private buildWhere(
+    query: QueryAdminDto,
+    operator: CurrentUser | null,
+  ): Prisma.AdminWhereInput {
     const where: Prisma.AdminWhereInput = {};
+
+    if (operator?.role === AdminRole.NORMAL) {
+      where.parentAdminId = operator.id;
+    }
 
     if (query.keyword?.trim()) {
       const keyword = query.keyword.trim();
@@ -190,6 +215,47 @@ export class AdminService {
     }
 
     return where;
+  }
+
+  private async buildCreateData(
+    dto: CreateAdminDto,
+    operator: CurrentUser,
+  ): Promise<Prisma.AdminCreateInput> {
+    if (operator.role === AdminRole.NORMAL) {
+      if (dto.role !== AdminRole.NORMAL) {
+        throw new ForbiddenException('普通管理员只能创建子管理员');
+      }
+
+      return {
+        username: dto.username,
+        passwordHash: await bcrypt.hash(dto.password, 10),
+        name: dto.name,
+        phone: dto.phone,
+        role: AdminRole.NORMAL,
+        status: AdminStatus.ENABLED,
+        parentAdmin: {
+          connect: { id: operator.id },
+        },
+      };
+    }
+
+    return {
+      username: dto.username,
+      passwordHash: await bcrypt.hash(dto.password, 10),
+      name: dto.name,
+      phone: dto.phone,
+      role: dto.role,
+      status: AdminStatus.ENABLED,
+    };
+  }
+
+  private async ensureAdminManageable(admin: Admin, operator: CurrentUser) {
+    if (operator.role === AdminRole.SUPER) {
+      return;
+    }
+    if (admin.parentAdminId !== operator.id) {
+      throw new ForbiddenException('无权管理该管理员');
+    }
   }
 
   private async findAdminOrThrow(id: number): Promise<Admin> {
@@ -217,6 +283,7 @@ export class AdminService {
       phone: admin.phone,
       role: admin.role,
       status: admin.status,
+      parentAdminId: admin.parentAdminId,
       createdAt: admin.createdAt,
       updatedAt: admin.updatedAt,
     };

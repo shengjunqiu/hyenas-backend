@@ -58,7 +58,7 @@ const routes = [
         path: 'admins',
         name: 'AdminList',
         component: () => import('@/pages/admin/List.vue'),
-        meta: { title: '管理员管理', roles: ['SUPER'] as AdminRole[] },
+        meta: { title: '管理员管理' },
       },
       {
         path: 'logs',

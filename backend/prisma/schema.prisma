@@ -39,81 +39,140 @@ enum MerchantFieldType {
   @@map("merchant_field_type")
 }
 
+enum FieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+
+  @@map("field_type")
+}
+
+enum TemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("template_status")
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+
+  @@map("project_status")
+}
+
+enum ProjectMemberRole {
+  PROJECT_ADMIN
+  PROJECT_MEMBER
+
+  @@map("project_member_role")
+}
+
+enum ImportSourceType {
+  MANUAL
+  EXCEL
+  PROJECT_IMPORT
+
+  @@map("import_source_type")
+}
+
 model Admin {
-  id                  Int                 @id @default(autoincrement())
-  username            String              @unique
-  passwordHash        String              @map("password_hash")
-  name                String
-  phone               String?
-  role                AdminRole           @default(NORMAL)
-  status              AdminStatus         @default(ENABLED)
-  createdAt           DateTime            @default(now()) @map("created_at")
-  updatedAt           DateTime            @updatedAt @map("updated_at")
-  createdMerchants    Merchant[]          @relation("MerchantCreatedBy")
-  merchantAdmins      MerchantAdmin[]     @relation("MerchantAdminAdmin")
-  assignedMerchantOps MerchantAdmin[]     @relation("MerchantAdminAssignedBy")
-  statusChangeLogs    MerchantStatusLog[] @relation("MerchantStatusLogChangedBy")
-  operationLogs       OperationLog[]      @relation("OperationLogOperator")
+  id                     Int                 @id @default(autoincrement())
+  username               String              @unique
+  passwordHash           String              @map("password_hash")
+  name                   String
+  phone                  String?
+  role                   AdminRole           @default(NORMAL)
+  status                 AdminStatus         @default(ENABLED)
+  parentAdminId          Int?                @map("parent_admin_id")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+  parentAdmin            Admin?              @relation("AdminHierarchy", fields: [parentAdminId], references: [id])
+  childAdmins            Admin[]             @relation("AdminHierarchy")
+  createdMerchants       Merchant[]          @relation("MerchantCreatedBy")
+  merchantAdmins         MerchantAdmin[]     @relation("MerchantAdminAdmin")
+  assignedMerchantOps    MerchantAdmin[]     @relation("MerchantAdminAssignedBy")
+  statusChangeLogs       MerchantStatusLog[] @relation("MerchantStatusLogChangedBy")
+  operationLogs          OperationLog[]      @relation("OperationLogOperator")
+  createdTemplates       DataTemplate[]      @relation("DataTemplateCreatedBy")
+  databaseRecords        DatabaseRecord[]    @relation("DatabaseRecordCreatedBy")
+  updatedDatabaseRecords DatabaseRecord[]    @relation("DatabaseRecordUpdatedBy")
+  databaseImportLogs     DatabaseImportLog[] @relation("DatabaseImportLogOperator")
+  createdProjects        Project[]           @relation("ProjectCreatedBy")
+  assignedProjects       Project[]           @relation("ProjectAdmin")
+  projectMembers         ProjectMember[]     @relation("ProjectMemberAdmin")
+  assignedProjectMembers ProjectMember[]     @relation("ProjectMemberAssignedBy")
+  importedProjectRecords ProjectRecord[]     @relation("ProjectRecordImportedBy")
+  createdProjectRecords  ProjectRecord[]     @relation("ProjectRecordCreatedBy")
+  updatedProjectRecords  ProjectRecord[]     @relation("ProjectRecordUpdatedBy")
+  projectImportLogs      ProjectImportLog[]  @relation("ProjectImportLogOperator")
 
   @@map("admins")
 }
 
 model Merchant {
-  id           Int                  @id @default(autoincrement())
-  name         String
-  creditCode   String?              @map("credit_code")
-  contactName  String?              @map("contact_name")
-  contactPhone String?              @map("contact_phone")
-  address      String?
-  supervisionAgency String?         @map("supervision_agency")
-  licenseNo    String?              @map("license_no")
-  businessType String?              @map("business_type")
-  statusId     Int                  @map("status_id")
-  remark       String?
-  createdBy    Int                  @map("created_by")
-  createdAt    DateTime             @default(now()) @map("created_at")
-  updatedAt    DateTime             @updatedAt @map("updated_at")
-  deletedAt    DateTime?            @map("deleted_at")
-  status       MerchantStatus       @relation(fields: [statusId], references: [id])
-  creator      Admin                @relation("MerchantCreatedBy", fields: [createdBy], references: [id])
-  fieldValues  MerchantFieldValue[]
-  admins       MerchantAdmin[]      @relation("MerchantAdminMerchant")
-  statusLogs   MerchantStatusLog[]  @relation("MerchantStatusLogMerchant")
+  id                Int                  @id @default(autoincrement())
+  name              String
+  creditCode        String?              @map("credit_code")
+  contactName       String?              @map("contact_name")
+  contactPhone      String?              @map("contact_phone")
+  address           String?
+  supervisionAgency String?              @map("supervision_agency")
+  licenseNo         String?              @map("license_no")
+  businessType      String?              @map("business_type")
+  statusId          Int                  @map("status_id")
+  remark            String?
+  createdBy         Int                  @map("created_by")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  deletedAt         DateTime?            @map("deleted_at")
+  status            MerchantStatus       @relation(fields: [statusId], references: [id])
+  creator           Admin                @relation("MerchantCreatedBy", fields: [createdBy], references: [id])
+  fieldValues       MerchantFieldValue[]
+  admins            MerchantAdmin[]      @relation("MerchantAdminMerchant")
+  statusLogs        MerchantStatusLog[]  @relation("MerchantStatusLogMerchant")
 
   @@map("merchants")
 }
 
 model MerchantStatus {
-  id         Int                 @id @default(autoincrement())
-  name       String
-  code       String              @unique
-  color      String?
-  sort       Int                 @default(0)
-  isEnabled  Boolean             @default(true) @map("is_enabled")
-  remark     String?
-  createdAt  DateTime            @default(now()) @map("created_at")
-  updatedAt  DateTime            @updatedAt @map("updated_at")
-  merchants  Merchant[]
-  fromLogs   MerchantStatusLog[] @relation("MerchantStatusLogFrom")
-  toLogs     MerchantStatusLog[] @relation("MerchantStatusLogTo")
+  id        Int                 @id @default(autoincrement())
+  name      String
+  code      String              @unique
+  color     String?
+  sort      Int                 @default(0)
+  isEnabled Boolean             @default(true) @map("is_enabled")
+  remark    String?
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+  merchants Merchant[]
+  fromLogs  MerchantStatusLog[] @relation("MerchantStatusLogFrom")
+  toLogs    MerchantStatusLog[] @relation("MerchantStatusLogTo")
 
   @@map("merchant_statuses")
 }
 
 model MerchantFieldDef {
-  id           Int                @id @default(autoincrement())
-  fieldKey     String             @unique @map("field_key")
-  fieldName    String             @map("field_name")
-  fieldType    MerchantFieldType  @map("field_type")
-  isRequired   Boolean            @default(false) @map("is_required")
-  isEnabled    Boolean            @default(true) @map("is_enabled")
-  isSearchable Boolean            @default(false) @map("is_searchable")
-  defaultValue String?            @map("default_value")
-  optionsJson  Json?              @map("options_json")
-  sort         Int                @default(0)
+  id           Int                  @id @default(autoincrement())
+  fieldKey     String               @unique @map("field_key")
+  fieldName    String               @map("field_name")
+  fieldType    MerchantFieldType    @map("field_type")
+  isRequired   Boolean              @default(false) @map("is_required")
+  isEnabled    Boolean              @default(true) @map("is_enabled")
+  isSearchable Boolean              @default(false) @map("is_searchable")
+  defaultValue String?              @map("default_value")
+  optionsJson  Json?                @map("options_json")
+  sort         Int                  @default(0)
   remark       String?
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
   fieldValues  MerchantFieldValue[]
 
   @@map("merchant_field_defs")
@@ -149,17 +208,17 @@ model MerchantAdmin {
 }
 
 model MerchantStatusLog {
-  id           Int            @id @default(autoincrement())
-  merchantId   Int            @map("merchant_id")
-  fromStatusId Int?           @map("from_status_id")
-  toStatusId   Int            @map("to_status_id")
-  changedBy    Int            @map("changed_by")
+  id           Int             @id @default(autoincrement())
+  merchantId   Int             @map("merchant_id")
+  fromStatusId Int?            @map("from_status_id")
+  toStatusId   Int             @map("to_status_id")
+  changedBy    Int             @map("changed_by")
   remark       String?
-  createdAt    DateTime       @default(now()) @map("created_at")
-  merchant     Merchant       @relation("MerchantStatusLogMerchant", fields: [merchantId], references: [id])
+  createdAt    DateTime        @default(now()) @map("created_at")
+  merchant     Merchant        @relation("MerchantStatusLogMerchant", fields: [merchantId], references: [id])
   fromStatus   MerchantStatus? @relation("MerchantStatusLogFrom", fields: [fromStatusId], references: [id])
-  toStatus     MerchantStatus @relation("MerchantStatusLogTo", fields: [toStatusId], references: [id])
-  changer      Admin          @relation("MerchantStatusLogChangedBy", fields: [changedBy], references: [id])
+  toStatus     MerchantStatus  @relation("MerchantStatusLogTo", fields: [toStatusId], references: [id])
+  changer      Admin           @relation("MerchantStatusLogChangedBy", fields: [changedBy], references: [id])
 
   @@map("merchant_status_logs")
 }
@@ -180,4 +239,184 @@ model OperationLog {
   operator     Admin    @relation("OperationLogOperator", fields: [operatorId], references: [id])
 
   @@map("operation_logs")
+}
+
+model DataTemplate {
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  code               String              @unique
+  description        String?
+  status             TemplateStatus      @default(DRAFT)
+  isEnabled          Boolean             @default(true) @map("is_enabled")
+  copiedFromId       Int?                @map("copied_from_id")
+  createdBy          Int                 @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  copiedFrom         DataTemplate?       @relation("DataTemplateCopy", fields: [copiedFromId], references: [id])
+  copiedTemplates    DataTemplate[]      @relation("DataTemplateCopy")
+  creator            Admin               @relation("DataTemplateCreatedBy", fields: [createdBy], references: [id])
+  fields             DataTemplateField[]
+  databaseRecords    DatabaseRecord[]
+  databaseImportLogs DatabaseImportLog[]
+  projects           Project[]
+  projectRecords     ProjectRecord[]
+  projectImportLogs  ProjectImportLog[]
+
+  @@map("data_templates")
+}
+
+model DataTemplateField {
+  id           Int          @id @default(autoincrement())
+  templateId   Int          @map("template_id")
+  fieldKey     String       @map("field_key")
+  fieldName    String       @map("field_name")
+  fieldType    FieldType    @map("field_type")
+  isRequired   Boolean      @default(false) @map("is_required")
+  isPrimaryKey Boolean      @default(false) @map("is_primary_key")
+  isListed     Boolean      @default(false) @map("is_listed")
+  isSearchable Boolean      @default(false) @map("is_searchable")
+  defaultValue String?      @map("default_value")
+  optionsJson  Json?        @map("options_json")
+  sort         Int          @default(0)
+  remark       String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  template     DataTemplate @relation(fields: [templateId], references: [id])
+
+  @@unique([templateId, fieldKey], map: "uniq_data_template_field")
+  @@index([templateId], map: "idx_data_template_fields_template_id")
+  @@map("data_template_fields")
+}
+
+model DatabaseRecord {
+  id              Int              @id @default(autoincrement())
+  templateId      Int              @map("template_id")
+  primaryKeyValue String           @map("primary_key_value")
+  dataJson        Json             @map("data_json")
+  sourceType      ImportSourceType @default(MANUAL) @map("source_type")
+  sourceName      String?          @map("source_name")
+  createdBy       Int              @map("created_by")
+  updatedBy       Int?             @map("updated_by")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+  template        DataTemplate     @relation(fields: [templateId], references: [id])
+  creator         Admin            @relation("DatabaseRecordCreatedBy", fields: [createdBy], references: [id])
+  updater         Admin?           @relation("DatabaseRecordUpdatedBy", fields: [updatedBy], references: [id])
+  projectRecords  ProjectRecord[]
+
+  @@unique([templateId, primaryKeyValue], map: "uniq_database_record")
+  @@index([templateId, primaryKeyValue], map: "idx_database_records_template_pk")
+  @@index([deletedAt], map: "idx_database_records_deleted_at")
+  @@map("database_records")
+}
+
+model DatabaseImportLog {
+  id                 Int          @id @default(autoincrement())
+  templateId         Int          @map("template_id")
+  fileName           String       @map("file_name")
+  totalCount         Int          @default(0) @map("total_count")
+  createdCount       Int          @default(0) @map("created_count")
+  updatedCount       Int          @default(0) @map("updated_count")
+  failedCount        Int          @default(0) @map("failed_count")
+  failureDetailsJson Json?        @map("failure_details_json")
+  operatorId         Int          @map("operator_id")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  template           DataTemplate @relation(fields: [templateId], references: [id])
+  operator           Admin        @relation("DatabaseImportLogOperator", fields: [operatorId], references: [id])
+
+  @@index([templateId], map: "idx_database_import_logs_template_id")
+  @@index([operatorId], map: "idx_database_import_logs_operator_id")
+  @@map("database_import_logs")
+}
+
+model Project {
+  id             Int                @id @default(autoincrement())
+  name           String
+  code           String             @unique
+  templateId     Int                @map("template_id")
+  description    String?
+  status         ProjectStatus      @default(DRAFT)
+  projectAdminId Int?               @map("project_admin_id")
+  startDate      DateTime?          @map("start_date")
+  endDate        DateTime?          @map("end_date")
+  createdBy      Int                @map("created_by")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  deletedAt      DateTime?          @map("deleted_at")
+  template       DataTemplate       @relation(fields: [templateId], references: [id])
+  projectAdmin   Admin?             @relation("ProjectAdmin", fields: [projectAdminId], references: [id])
+  creator        Admin              @relation("ProjectCreatedBy", fields: [createdBy], references: [id])
+  members        ProjectMember[]
+  records        ProjectRecord[]
+  importLogs     ProjectImportLog[]
+
+  @@index([templateId], map: "idx_projects_template_id")
+  @@index([projectAdminId], map: "idx_projects_project_admin_id")
+  @@index([deletedAt], map: "idx_projects_deleted_at")
+  @@map("projects")
+}
+
+model ProjectMember {
+  id         Int               @id @default(autoincrement())
+  projectId  Int               @map("project_id")
+  adminId    Int               @map("admin_id")
+  role       ProjectMemberRole
+  assignedBy Int               @map("assigned_by")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  project    Project           @relation(fields: [projectId], references: [id])
+  admin      Admin             @relation("ProjectMemberAdmin", fields: [adminId], references: [id])
+  assigner   Admin             @relation("ProjectMemberAssignedBy", fields: [assignedBy], references: [id])
+
+  @@unique([projectId, adminId], map: "uniq_project_member")
+  @@index([projectId], map: "idx_project_members_project_id")
+  @@index([adminId], map: "idx_project_members_admin_id")
+  @@map("project_members")
+}
+
+model ProjectRecord {
+  id                    Int            @id @default(autoincrement())
+  projectId             Int            @map("project_id")
+  templateId            Int            @map("template_id")
+  sourceRecordId        Int            @map("source_record_id")
+  sourcePrimaryKeyValue String         @map("source_primary_key_value")
+  dataJson              Json           @map("data_json")
+  importedBy            Int            @map("imported_by")
+  createdBy             Int            @map("created_by")
+  updatedBy             Int?           @map("updated_by")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  deletedAt             DateTime?      @map("deleted_at")
+  project               Project        @relation(fields: [projectId], references: [id])
+  template              DataTemplate   @relation(fields: [templateId], references: [id])
+  sourceRecord          DatabaseRecord @relation(fields: [sourceRecordId], references: [id])
+  importer              Admin          @relation("ProjectRecordImportedBy", fields: [importedBy], references: [id])
+  creator               Admin          @relation("ProjectRecordCreatedBy", fields: [createdBy], references: [id])
+  updater               Admin?         @relation("ProjectRecordUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@unique([projectId, sourceRecordId], map: "uniq_project_record")
+  @@index([projectId], map: "idx_project_records_project_id")
+  @@index([templateId], map: "idx_project_records_template_id")
+  @@index([deletedAt], map: "idx_project_records_deleted_at")
+  @@map("project_records")
+}
+
+model ProjectImportLog {
+  id            Int          @id @default(autoincrement())
+  projectId     Int          @map("project_id")
+  templateId    Int          @map("template_id")
+  recordIdsJson Json         @map("record_ids_json")
+  totalCount    Int          @default(0) @map("total_count")
+  createdCount  Int          @default(0) @map("created_count")
+  skippedCount  Int          @default(0) @map("skipped_count")
+  operatorId    Int          @map("operator_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  project       Project      @relation(fields: [projectId], references: [id])
+  template      DataTemplate @relation(fields: [templateId], references: [id])
+  operator      Admin        @relation("ProjectImportLogOperator", fields: [operatorId], references: [id])
+
+  @@index([projectId], map: "idx_project_import_logs_project_id")
+  @@index([templateId], map: "idx_project_import_logs_template_id")
+  @@index([operatorId], map: "idx_project_import_logs_operator_id")
+  @@map("project_import_logs")
 }

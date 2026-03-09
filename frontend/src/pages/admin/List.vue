@@ -8,8 +8,10 @@ import {
   updateAdminApi,
   updateAdminStatusApi,
 } from '@/api/admin'
+import { useUserStore } from '@/stores/user'
 import type { Admin, AdminRole, AdminStatus } from '@/types'
 
+const userStore = useUserStore()
 const loading = ref(false)
 const submitting = ref(false)
 const passwordSubmitting = ref(false)
@@ -51,6 +53,15 @@ const rules = {
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
+const pageTitle = computed(() => (userStore.isSuper ? '管理员管理' : '子管理员管理'))
+const createButtonText = computed(() => (userStore.isSuper ? '新增管理员' : '新增子管理员'))
+const dialogTitle = computed(() => {
+  if (isEdit.value) {
+    return userStore.isSuper ? '编辑管理员' : '编辑子管理员'
+  }
+  return userStore.isSuper ? '新增管理员' : '新增子管理员'
+})
+
 const fetchList = async () => {
   loading.value = true
   try {
@@ -90,6 +101,7 @@ const resetForm = () => {
 const onCreate = () => {
   isEdit.value = false
   resetForm()
+  form.role = 'NORMAL'
   dialogVisible.value = true
 }
 
@@ -116,18 +128,18 @@ const onSubmit = async () => {
       await updateAdminApi(form.id, {
         name: form.name,
         phone: form.phone || undefined,
-        role: form.role,
+        role: userStore.isSuper ? form.role : undefined,
       })
-      ElMessage.success('管理员更新成功')
+      ElMessage.success(userStore.isSuper ? '管理员更新成功' : '子管理员更新成功')
     } else {
       await createAdminApi({
         username: form.username,
         password: form.password,
         name: form.name,
         phone: form.phone || undefined,
-        role: form.role,
+        role: userStore.isSuper ? form.role : 'NORMAL',
       })
-      ElMessage.success('管理员创建成功')
+      ElMessage.success(userStore.isSuper ? '管理员创建成功' : '子管理员创建成功')
     }
     dialogVisible.value = false
     await fetchList()
@@ -174,6 +186,7 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
 
 <template>
   <div class="page-block">
+    <div style="font-size: 18px; font-weight: 600; margin-bottom: 12px">{{ pageTitle }}</div>
     <el-form :inline="true" class="filter-form">
       <el-form-item label="关键词">
         <el-input v-model="query.keyword" placeholder="账号/姓名/手机号" clearable />
@@ -191,7 +204,7 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
     </el-form>
 
     <div style="margin-bottom: 12px">
-      <el-button type="primary" @click="onCreate">新增管理员</el-button>
+      <el-button type="primary" @click="onCreate">{{ createButtonText }}</el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border>
@@ -204,6 +217,11 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
           <el-tag :type="row.role === 'SUPER' ? 'danger' : 'info'">
             {{ row.role === 'SUPER' ? '超级管理员' : '普通管理员' }}
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column v-if="userStore.isSuper" label="所属上级" min-width="160">
+        <template #default="{ row }">
+          {{ row.parentAdmin ? `${row.parentAdmin.name}（${row.parentAdmin.username}）` : '-' }}
         </template>
       </el-table-column>
       <el-table-column label="账号状态" width="120">
@@ -242,7 +260,7 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
 
     <el-dialog
       v-model="dialogVisible"
-      :title="isEdit ? '编辑管理员' : '新增管理员'"
+      :title="dialogTitle"
       width="560px"
       @closed="resetForm"
     >
@@ -259,11 +277,14 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
         <el-form-item label="手机号">
           <el-input v-model="form.phone" />
         </el-form-item>
-        <el-form-item label="角色" prop="role">
+        <el-form-item v-if="userStore.isSuper" label="角色" prop="role">
           <el-select v-model="form.role" style="width: 100%">
             <el-option label="超级管理员" value="SUPER" />
             <el-option label="普通管理员" value="NORMAL" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-else label="角色">
+          <el-input value="普通管理员" disabled />
         </el-form-item>
       </el-form>
       <template #footer>

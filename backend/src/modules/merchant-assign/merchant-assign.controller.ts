@@ -9,9 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AdminRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { CurrentUser as CurrentUserInfo } from '../auth/interfaces/current-user.interface';
@@ -22,7 +20,6 @@ import { MerchantAssignService } from './merchant-assign.service';
 @ApiTags('Merchant Assign')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(AdminRole.SUPER)
 @Controller()
 export class MerchantAssignController {
   constructor(private readonly merchantAssignService: MerchantAssignService) {}
@@ -42,8 +39,11 @@ export class MerchantAssignController {
 
   @Get('merchants/:id/admins')
   @ApiOperation({ summary: '查看商家已分配管理员' })
-  getMerchantAdmins(@Param('id', ParseIntPipe) merchantId: number) {
-    return this.merchantAssignService.getMerchantAdmins(merchantId);
+  getMerchantAdmins(
+    @Param('id', ParseIntPipe) merchantId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.getMerchantAdmins(merchantId, user);
   }
 
   @Post('merchants/:id/assign-admins')
@@ -72,7 +72,10 @@ export class MerchantAssignController {
 
   @Get('admins/:id/merchants')
   @ApiOperation({ summary: '查看某管理员负责的商家列表' })
-  getAdminMerchants(@Param('id', ParseIntPipe) adminId: number) {
-    return this.merchantAssignService.getAdminMerchants(adminId);
+  getAdminMerchants(
+    @Param('id', ParseIntPipe) adminId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.getAdminMerchants(adminId, user);
   }
 }

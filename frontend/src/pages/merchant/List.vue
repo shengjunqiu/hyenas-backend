@@ -188,18 +188,17 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
         新增商家
       </el-button>
       <el-button
-        v-role="'SUPER'"
         style="margin-left: 8px"
         @click="openBatchAssign"
         :disabled="!selectedMerchantIds.length"
       >
-        批量分配管理员
+        {{ userStore.isSuper ? '批量分配管理员' : '批量分配子管理员' }}
       </el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border @selection-change="onSelectionChange">
       <template #empty>暂无数据</template>
-      <el-table-column v-if="userStore.isSuper" type="selection" width="48" />
+      <el-table-column type="selection" width="48" />
       <el-table-column prop="name" label="经营者名称" min-width="180" />
       <el-table-column prop="contactName" label="法定代表人（负责人）" min-width="150" />
       <el-table-column prop="contactPhone" label="法定代表人联系方式" min-width="160" />
@@ -233,8 +232,8 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
               编辑
             </el-button>
             <el-button v-role="'SUPER'" link type="danger" @click="onDelete(row)">删除</el-button>
-            <el-button v-role="'SUPER'" link type="primary" @click="openAssign(row)">
-              分配管理员
+            <el-button link type="primary" @click="openAssign(row)">
+              {{ userStore.isSuper ? '分配管理员' : '分配子管理员' }}
             </el-button>
             <el-button link type="primary" @click="openChangeStatus(row)">修改状态</el-button>
           </el-space>

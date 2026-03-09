@@ -10,9 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AdminRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { CurrentUser as CurrentUserInfo } from '../auth/interfaces/current-user.interface';
@@ -26,15 +24,14 @@ import { UpdateAdminDto } from './dto/update-admin.dto';
 @ApiTags('Admins')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(AdminRole.SUPER)
 @Controller('admins')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get()
   @ApiOperation({ summary: '管理员列表（分页、搜索）' })
-  query(@Query() query: QueryAdminDto) {
-    return this.adminService.queryAdmins(query);
+  query(@Query() query: QueryAdminDto, @CurrentUser() user: CurrentUserInfo) {
+    return this.adminService.queryAdminsByOperator(query, user);
   }
 
   @Post()

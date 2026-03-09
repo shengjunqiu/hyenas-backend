@@ -33,7 +33,7 @@ const fullMenu: MenuItem[] = [
   { path: '/merchants', label: '商家管理', icon: Shop },
   { path: '/statuses', label: '状态管理', icon: SetUp, roles: ['SUPER'] },
   { path: '/fields', label: '字段管理', icon: Document, roles: ['SUPER'] },
-  { path: '/admins', label: '管理员管理', icon: User, roles: ['SUPER'] },
+  { path: '/admins', label: '管理员管理', icon: User },
   { path: '/logs', label: '操作日志', icon: Notebook },
 ]
 

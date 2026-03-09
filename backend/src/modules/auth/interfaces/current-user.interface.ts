@@ -6,4 +6,5 @@ export interface CurrentUser {
   name: string;
   role: AdminRole;
   status: AdminStatus;
+  parentAdminId?: number | null;
 }

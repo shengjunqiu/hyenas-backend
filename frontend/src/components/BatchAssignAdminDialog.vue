@@ -3,10 +3,12 @@ import { ElMessage } from 'element-plus'
 import { getAdminsApi } from '@/api/admin'
 import { batchAssignMerchantAdminsApi } from '@/api/merchant'
 import type { Admin } from '@/types'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps<{ merchantIds: number[] }>()
 const emit = defineEmits<{ success: [] }>()
 
+const userStore = useUserStore()
 const visible = defineModel<boolean>({ required: true })
 const loading = ref(false)
 const adminOptions = ref<Admin[]>([])
@@ -60,7 +62,7 @@ const onSubmit = async () => {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="批量分配管理员" width="560px">
+  <el-dialog v-model="visible" :title="userStore.isSuper ? '批量分配管理员' : '批量分配子管理员'" width="560px">
     <div v-loading="loading">
       <el-alert
         :closable="false"
@@ -76,7 +78,7 @@ const onSubmit = async () => {
             multiple
             collapse-tags
             collapse-tags-tooltip
-            placeholder="请选择普通管理员"
+            :placeholder="userStore.isSuper ? '请选择普通管理员' : '请选择子管理员'"
             style="width: 100%"
           >
             <el-option

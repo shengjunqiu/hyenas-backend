@@ -15,6 +15,7 @@ export interface UserInfo {
   name: string
   role: AdminRole
   status?: AdminStatus
+  parentAdminId?: number | null
 }
 
 export interface ApiResponse<T> {
@@ -52,6 +53,8 @@ export interface Admin {
   phone?: string | null
   role: AdminRole
   status: AdminStatus
+  parentAdminId?: number | null
+  parentAdmin?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
   createdAt: string
   updatedAt?: string
   merchantCount?: number

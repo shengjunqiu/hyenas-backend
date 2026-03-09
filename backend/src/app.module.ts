@@ -9,6 +9,7 @@ import { MerchantFieldModule } from './modules/merchant-field/merchant-field.mod
 import { MerchantModule } from './modules/merchant/merchant.module';
 import { MerchantStatusModule } from './modules/merchant-status/merchant-status.module';
 import { OperationLogModule } from './modules/operation-log/operation-log.module';
+import { TemplateModule } from './modules/template/template.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { OperationLogInterceptor } from './common/interceptors/operation-log.interceptor';
 
@@ -23,6 +24,7 @@ import { OperationLogInterceptor } from './common/interceptors/operation-log.int
     MerchantModule,
     MerchantAssignModule,
     OperationLogModule,
+    TemplateModule,
   ],
   controllers: [AppController],
   providers: [AppService, OperationLogInterceptor],

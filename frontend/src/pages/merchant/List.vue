@@ -214,7 +214,7 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       <el-table-column prop="supervisionAgency" label="日常监督管理机构" min-width="180" />
       <el-table-column label="分配管理员" min-width="180">
         <template #default="{ row }">
-          {{ row.admins?.map((item: { admin: Admin }) => item.admin.name).join('，') || '-' }}
+          {{ row.admins?.map((item: { admin: Admin }) => item.admin.name).join('，') || '未分配' }}
         </template>
       </el-table-column>
       <el-table-column label="创建时间" min-width="170">

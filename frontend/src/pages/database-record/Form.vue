@@ -7,7 +7,8 @@ import {
   updateDatabaseRecordApi,
 } from '@/api/database-record'
 import { getTemplateDetailApi, getTemplatesApi } from '@/api/template'
-import type { DataTemplate, DataTemplateField } from '@/types'
+import DynamicDataForm from '@/components/DynamicDataForm.vue'
+import type { DataTemplate } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +19,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const templatesLoading = ref(false)
 const formRef = ref()
+const dynamicFormRef = ref<InstanceType<typeof DynamicDataForm> | null>(null)
 const templates = ref<DataTemplate[]>([])
 const selectedTemplate = ref<DataTemplate | null>(null)
 
@@ -34,45 +36,6 @@ const rules: FormRules = {
   templateId: [{ required: true, message: '请选择模板', trigger: 'change' }],
 }
 
-const parseOptions = (field: DataTemplateField) => {
-  if (!Array.isArray(field.optionsJson)) {
-    return []
-  }
-  return field.optionsJson.map((item) => ({
-    label: String(item),
-    value: String(item),
-  }))
-}
-
-const fieldRules = (field: DataTemplateField) => {
-  if (!field.isRequired) {
-    return []
-  }
-  return [{ required: true, message: `请填写${field.fieldName}`, trigger: 'change' }]
-}
-
-const ensureTemplateDefaults = () => {
-  for (const field of templateFields.value) {
-    if (form.dataJson[field.fieldKey] !== undefined) {
-      continue
-    }
-
-    if (field.fieldType === 'MULTI_SELECT') {
-      form.dataJson[field.fieldKey] = []
-      continue
-    }
-    if (field.fieldType === 'BOOLEAN') {
-      form.dataJson[field.fieldKey] = false
-      continue
-    }
-    if (field.defaultValue !== undefined && field.defaultValue !== null) {
-      form.dataJson[field.fieldKey] = field.defaultValue
-      continue
-    }
-    form.dataJson[field.fieldKey] = ''
-  }
-}
-
 const fetchTemplates = async () => {
   templatesLoading.value = true
   try {
@@ -84,7 +47,6 @@ const fetchTemplates = async () => {
 
 const fetchTemplateDetail = async (templateId: number) => {
   selectedTemplate.value = await getTemplateDetailApi(templateId)
-  ensureTemplateDefaults()
 }
 
 const fetchDetail = async () => {
@@ -106,24 +68,20 @@ const onTemplateChange = async (templateId?: number) => {
     return
   }
   await fetchTemplateDetail(templateId)
+  await nextTick()
+  dynamicFormRef.value?.resetValidation()
 }
 
 const buildPayload = () => ({
   templateId: form.templateId,
   sourceName: form.sourceName || undefined,
-  dataJson: Object.fromEntries(
-    Object.entries(form.dataJson).map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return [key, value]
-      }
-      return [key, value]
-    }),
-  ),
+  dataJson: dynamicFormRef.value?.getNormalizedData() || form.dataJson,
 })
 
 const onSubmit = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid || !form.templateId) {
+  const dynamicValid = templateFields.value.length ? await dynamicFormRef.value?.validate() : true
+  if (!valid || !dynamicValid || !form.templateId) {
     return
   }
 
@@ -220,70 +178,12 @@ onMounted(async () => {
 
         <el-empty v-if="!templateFields.length" description="请先选择模板" />
 
-        <el-row v-else :gutter="16">
-          <el-col v-for="field in templateFields" :key="field.id" :span="12">
-            <el-form-item
-              :label="field.fieldName"
-              :prop="`dataJson.${field.fieldKey}`"
-              :rules="fieldRules(field)"
-            >
-              <el-input
-                v-if="field.fieldType === 'TEXT'"
-                v-model="form.dataJson[field.fieldKey] as string"
-              />
-              <el-input
-                v-else-if="field.fieldType === 'TEXTAREA'"
-                v-model="form.dataJson[field.fieldKey] as string"
-                type="textarea"
-                :rows="3"
-              />
-              <el-input-number
-                v-else-if="field.fieldType === 'NUMBER'"
-                v-model="form.dataJson[field.fieldKey] as number"
-                style="width: 100%"
-              />
-              <el-date-picker
-                v-else-if="field.fieldType === 'DATE'"
-                v-model="form.dataJson[field.fieldKey] as string"
-                type="date"
-                value-format="YYYY-MM-DD"
-                style="width: 100%"
-              />
-              <el-select
-                v-else-if="field.fieldType === 'SELECT'"
-                v-model="form.dataJson[field.fieldKey] as string"
-                style="width: 100%"
-                clearable
-              >
-                <el-option
-                  v-for="option in parseOptions(field)"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                />
-              </el-select>
-              <el-select
-                v-else-if="field.fieldType === 'MULTI_SELECT'"
-                v-model="form.dataJson[field.fieldKey] as string[]"
-                multiple
-                collapse-tags
-                collapse-tags-tooltip
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="option in parseOptions(field)"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                />
-              </el-select>
-              <el-switch
-                v-else-if="field.fieldType === 'BOOLEAN'"
-                v-model="form.dataJson[field.fieldKey] as boolean"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <DynamicDataForm
+          v-else
+          ref="dynamicFormRef"
+          v-model="form.dataJson"
+          :fields="templateFields"
+        />
       </el-card>
 
       <div class="database-record-form__footer">

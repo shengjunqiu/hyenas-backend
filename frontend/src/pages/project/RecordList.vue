@@ -10,6 +10,7 @@ import {
 } from '@/api/project'
 import DatabaseRecordPickerDialog from '@/components/DatabaseRecordPickerDialog.vue'
 import DynamicDataForm from '@/components/DynamicDataForm.vue'
+import { formatDynamicFieldValue, useDynamicColumns } from '@/composables/useDynamicColumns'
 import { useUserStore } from '@/stores/user'
 import type { Project, ProjectRecord } from '@/types'
 
@@ -42,26 +43,13 @@ const query = reactive({
 })
 
 const templateFields = computed(() => project.value?.template?.fields || [])
-const dynamicColumns = computed(() =>
-  templateFields.value.filter((field) => field.isPrimaryKey || field.isListed),
-)
+const dynamicColumns = useDynamicColumns(templateFields)
 const canImport = computed(
   () => userStore.isSuper || project.value?.projectAdminId === userStore.user?.id,
 )
 
 const formatDate = (value?: string | null) =>
   value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-'
-
-const readCellValue = (row: Pick<ProjectRecord, 'dataJson'>, fieldKey: string) => {
-  const value = row.dataJson?.[fieldKey]
-  if (Array.isArray(value)) {
-    return value.join('、')
-  }
-  if (typeof value === 'boolean') {
-    return value ? '是' : '否'
-  }
-  return value ?? '-'
-}
 
 const fetchProjectDetail = async () => {
   if (!id.value) {
@@ -280,7 +268,7 @@ onMounted(() => {
           min-width="160"
         >
           <template #default="{ row }">
-            {{ readCellValue(row, field.fieldKey) }}
+            {{ formatDynamicFieldValue(row.dataJson, field.fieldKey) }}
           </template>
         </el-table-column>
         <el-table-column label="来源数据库记录" min-width="160">
@@ -350,7 +338,7 @@ onMounted(() => {
                 :key="field.id"
                 :label="field.fieldName"
               >
-                {{ readCellValue(currentRecordDetail, field.fieldKey) }}
+                {{ formatDynamicFieldValue(currentRecordDetail.dataJson, field.fieldKey) }}
               </el-descriptions-item>
             </el-descriptions>
           </el-card>

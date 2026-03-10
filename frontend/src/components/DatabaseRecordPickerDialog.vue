@@ -2,6 +2,7 @@
 import { ElMessage } from 'element-plus'
 import { getDatabaseRecordsApi } from '@/api/database-record'
 import { importProjectRecordsApi } from '@/api/project'
+import { formatDynamicFieldValue, useDynamicColumns } from '@/composables/useDynamicColumns'
 import type { DataTemplateField, DatabaseRecord, ProjectImportResult } from '@/types'
 
 const props = defineProps<{
@@ -30,23 +31,10 @@ const query = reactive({
   pageSize: 10,
 })
 
-const dynamicColumns = computed(() =>
-  (props.templateFields || []).filter((field) => field.isPrimaryKey || field.isListed),
-)
+const dynamicColumns = useDynamicColumns(() => props.templateFields)
 
 const selectedRecords = computed(() => Object.values(selectedRecordMap.value))
 const selectedIds = computed(() => selectedRecords.value.map((item) => item.id))
-
-const readCellValue = (row: DatabaseRecord, fieldKey: string) => {
-  const value = row.dataJson?.[fieldKey]
-  if (Array.isArray(value)) {
-    return value.join('、')
-  }
-  if (typeof value === 'boolean') {
-    return value ? '是' : '否'
-  }
-  return value ?? '-'
-}
 
 const syncTableSelection = async () => {
   await nextTick()
@@ -193,7 +181,7 @@ watch([() => visible.value, () => props.templateId], async ([nextVisible]) => {
           min-width="160"
         >
           <template #default="{ row }">
-            {{ readCellValue(row, field.fieldKey) }}
+            {{ formatDynamicFieldValue(row.dataJson, field.fieldKey) }}
           </template>
         </el-table-column>
         <el-table-column prop="sourceName" label="来源名称" min-width="180" />

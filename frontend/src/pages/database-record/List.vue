@@ -9,6 +9,7 @@ import {
 } from '@/api/database-record'
 import { getTemplateDetailApi, getTemplatesApi } from '@/api/template'
 import ExcelImportDialog from '@/components/ExcelImportDialog.vue'
+import { formatDynamicFieldValue, useDynamicColumns } from '@/composables/useDynamicColumns'
 import type { DataTemplate, DatabaseImportLog, DatabaseRecord } from '@/types'
 
 const router = useRouter()
@@ -41,26 +42,12 @@ const logQuery = reactive({
   pageSize: 20,
 })
 
-const dynamicColumns = computed(() => {
-  const fields = selectedTemplate.value?.fields || []
-  return fields.filter((field) => field.isPrimaryKey || field.isListed)
-})
+const dynamicColumns = useDynamicColumns(() => selectedTemplate.value?.fields)
 
 const enabledTemplates = computed(() => templates.value.filter((item) => item.isEnabled))
 
 const formatDate = (value?: string | null) =>
   value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-'
-
-const readCellValue = (row: DatabaseRecord, fieldKey: string) => {
-  const value = row.dataJson?.[fieldKey]
-  if (Array.isArray(value)) {
-    return value.join('、')
-  }
-  if (typeof value === 'boolean') {
-    return value ? '是' : '否'
-  }
-  return value ?? '-'
-}
 
 const fetchTemplates = async () => {
   templatesLoading.value = true
@@ -247,7 +234,7 @@ onMounted(async () => {
         min-width="160"
       >
         <template #default="{ row }">
-          {{ readCellValue(row, field.fieldKey) }}
+          {{ formatDynamicFieldValue(row.dataJson, field.fieldKey) }}
         </template>
       </el-table-column>
       <el-table-column prop="sourceName" label="来源名称" min-width="160" />

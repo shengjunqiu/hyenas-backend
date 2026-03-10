@@ -432,6 +432,8 @@ export class DatabaseRecordService {
       operator,
       targetId: importLog.id,
       targetName: file.originalname,
+      module: 'DATABASE_IMPORT',
+      targetType: 'DATABASE_IMPORT_LOG',
       afterData: {
         templateId: dto.templateId,
         fileName: file.originalname,
@@ -662,14 +664,24 @@ export class DatabaseRecordService {
     targetName: string;
     beforeData?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
     afterData?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+    module?: string;
+    targetType?: string;
   }) {
-    const { action, operator, targetId, targetName, beforeData, afterData } =
-      params;
+    const {
+      action,
+      operator,
+      targetId,
+      targetName,
+      beforeData,
+      afterData,
+      module,
+      targetType,
+    } = params;
     await this.prisma.operationLog.create({
       data: {
-        module: 'DATABASE_RECORD',
+        module: module ?? 'DATABASE_RECORD',
         action,
-        targetType: 'DATABASE_RECORD',
+        targetType: targetType ?? 'DATABASE_RECORD',
         targetId,
         targetName,
         operatorId: operator.id,

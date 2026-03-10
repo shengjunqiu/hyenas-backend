@@ -189,14 +189,9 @@ export class ProjectService {
 
   async update(id: number, dto: UpdateProjectDto, operator: CurrentUser) {
     const existing =
-      await this.projectPermissionService.ensureProjectAccessible(id, operator);
-
-    if (
-      operator.role !== AdminRole.SUPER &&
-      existing.projectAdminId !== operator.id
-    ) {
-      throw new ForbiddenException('无权编辑该项目');
-    }
+      operator.role === AdminRole.SUPER
+        ? await this.findProjectOrThrow(id)
+        : await this.projectPermissionService.ensureProjectAdmin(id, operator);
 
     if (dto.code && dto.code !== existing.code) {
       await this.ensureProjectCodeUnique(dto.code);
@@ -356,6 +351,7 @@ export class ProjectService {
         projectAdminId: dto.adminId,
       } as Prisma.InputJsonValue,
       module: 'PROJECT_MEMBER',
+      targetType: 'PROJECT',
     });
 
     return updated;
@@ -459,6 +455,7 @@ export class ProjectService {
         role: ProjectMemberRole.PROJECT_MEMBER,
       } as Prisma.InputJsonValue,
       module: 'PROJECT_MEMBER',
+      targetType: 'PROJECT_MEMBER',
     });
 
     return created;
@@ -508,6 +505,7 @@ export class ProjectService {
         role: relation.role,
       } as Prisma.InputJsonValue,
       module: 'PROJECT_MEMBER',
+      targetType: 'PROJECT_MEMBER',
     });
 
     return null;
@@ -785,6 +783,8 @@ export class ProjectService {
     let createdCount = 0;
     let skippedCount = 0;
 
+    let importLogId: number | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       for (const recordId of dto.recordIds) {
         const sourceRecord = sourceRecordMap.get(recordId)!;
@@ -824,7 +824,7 @@ export class ProjectService {
         createdCount += 1;
       }
 
-      await tx.projectImportLog.create({
+      const importLog = await tx.projectImportLog.create({
         data: {
           projectId,
           templateId: project.templateId,
@@ -835,14 +835,15 @@ export class ProjectService {
           operatorId: operator.id,
         },
       });
+      importLogId = importLog.id;
     });
 
     await this.writeOperationLog({
       module: 'PROJECT_IMPORT',
-      targetType: 'PROJECT',
+      targetType: 'PROJECT_IMPORT_LOG',
       action: 'IMPORT_PROJECT_RECORDS',
       operator,
-      targetId: project.id,
+      targetId: importLogId ?? project.id,
       targetName: project.name,
       afterData: {
         recordIds: dto.recordIds,

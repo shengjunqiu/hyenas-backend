@@ -1,11 +1,16 @@
-import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+  type RouteRecordRaw,
+} from 'vue-router'
 import { ElMessage } from 'element-plus'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 import { useUserStore } from '@/stores/user'
 import type { AdminRole } from '@/types'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
@@ -65,6 +70,78 @@ const routes = [
         name: 'LogList',
         component: () => import('@/pages/log/List.vue'),
         meta: { title: '操作日志' },
+      },
+      {
+        path: 'templates',
+        name: 'TemplateList',
+        component: () => import('@/pages/template/List.vue'),
+        meta: { title: '模板管理', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'templates/create',
+        name: 'TemplateCreate',
+        component: () => import('@/pages/template/Form.vue'),
+        meta: { title: '新建模板', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'templates/:id',
+        name: 'TemplateDetail',
+        component: () => import('@/pages/template/Detail.vue'),
+        meta: { title: '模板详情', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'database-records',
+        name: 'DatabaseRecordList',
+        component: () => import('@/pages/database-record/List.vue'),
+        meta: { title: '数据库管理', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'database-records/create',
+        name: 'DatabaseRecordCreate',
+        component: () => import('@/pages/database-record/Form.vue'),
+        meta: { title: '新增数据库数据', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'database-records/:id',
+        name: 'DatabaseRecordDetail',
+        component: () => import('@/pages/database-record/Detail.vue'),
+        meta: { title: '数据库数据详情', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'database-records/:id/edit',
+        name: 'DatabaseRecordEdit',
+        component: () => import('@/pages/database-record/Form.vue'),
+        meta: { title: '编辑数据库数据', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'projects',
+        name: 'ProjectList',
+        component: () => import('@/pages/project/List.vue'),
+        meta: { title: '项目管理' },
+      },
+      {
+        path: 'projects/create',
+        name: 'ProjectCreate',
+        component: () => import('@/pages/project/Form.vue'),
+        meta: { title: '新建项目' },
+      },
+      {
+        path: 'projects/:id',
+        name: 'ProjectDetail',
+        component: () => import('@/pages/project/Detail.vue'),
+        meta: { title: '项目详情' },
+      },
+      {
+        path: 'projects/:id/edit',
+        name: 'ProjectEdit',
+        component: () => import('@/pages/project/Form.vue'),
+        meta: { title: '编辑项目' },
+      },
+      {
+        path: 'projects/:id/records',
+        name: 'ProjectRecordList',
+        component: () => import('@/pages/project/RecordList.vue'),
+        meta: { title: '项目数据' },
       },
     ],
   },

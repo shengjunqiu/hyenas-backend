@@ -8,6 +8,9 @@ export type FieldType =
   | 'SELECT'
   | 'MULTI_SELECT'
   | 'BOOLEAN'
+export type TemplateStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+export type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
+export type ProjectMemberRole = 'PROJECT_ADMIN' | 'PROJECT_MEMBER'
 
 export interface UserInfo {
   id: number
@@ -135,4 +138,141 @@ export interface OperationLog {
   afterData?: unknown
   ip?: string | null
   createdAt: string
+}
+
+export interface DataTemplateField {
+  id: number
+  templateId: number
+  fieldKey: string
+  fieldName: string
+  fieldType: FieldType
+  isRequired: boolean
+  isPrimaryKey: boolean
+  isListed: boolean
+  isSearchable: boolean
+  defaultValue?: string | null
+  optionsJson?: unknown
+  sort: number
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DataTemplate {
+  id: number
+  name: string
+  code: string
+  description?: string | null
+  status: TemplateStatus
+  isEnabled: boolean
+  copiedFromId?: number | null
+  createdBy?: number
+  createdAt: string
+  updatedAt: string
+  fieldCount?: number
+  copiedFrom?: Pick<DataTemplate, 'id' | 'name' | 'code'> | null
+  creator?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+  fields?: DataTemplateField[]
+}
+
+export interface DatabaseRecord {
+  id: number
+  templateId: number
+  primaryKeyValue: string
+  dataJson: Record<string, unknown>
+  sourceType: 'MANUAL' | 'EXCEL' | 'PROJECT_IMPORT'
+  sourceName?: string | null
+  createdBy: number
+  updatedBy?: number | null
+  createdAt: string
+  updatedAt: string
+  deletedAt?: string | null
+  template?: Pick<DataTemplate, 'id' | 'name' | 'code'> & {
+    fields?: DataTemplateField[]
+  }
+  creator?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+  updater?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+}
+
+export interface DatabaseImportLog {
+  id: number
+  templateId: number
+  fileName: string
+  totalCount: number
+  createdCount: number
+  updatedCount: number
+  failedCount: number
+  failureDetailsJson?: unknown
+  operatorId: number
+  createdAt: string
+  template?: Pick<DataTemplate, 'id' | 'name' | 'code'> | null
+  operator?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+}
+
+export interface ProjectMember {
+  id: number
+  projectId: number
+  adminId: number
+  role: ProjectMemberRole
+  assignedBy: number
+  createdAt: string
+  admin?: Admin
+  assigner?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+}
+
+export interface Project {
+  id: number
+  name: string
+  code: string
+  templateId: number
+  description?: string | null
+  status: ProjectStatus
+  projectAdminId?: number | null
+  startDate?: string | null
+  endDate?: string | null
+  createdBy: number
+  createdAt: string
+  updatedAt: string
+  deletedAt?: string | null
+  template?: Pick<DataTemplate, 'id' | 'name' | 'code'> & {
+    isEnabled?: boolean
+    status?: TemplateStatus
+    fields?: DataTemplateField[]
+  }
+  projectAdmin?: Pick<Admin, 'id' | 'username' | 'name' | 'phone'> | null
+  creator?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+  members?: ProjectMember[]
+  memberCount?: number
+  recordCount?: number
+}
+
+export interface ProjectRecord {
+  id: number
+  projectId: number
+  templateId: number
+  sourceRecordId: number
+  sourcePrimaryKeyValue: string
+  dataJson: Record<string, unknown>
+  importedBy: number
+  createdBy: number
+  updatedBy?: number | null
+  createdAt: string
+  updatedAt: string
+  deletedAt?: string | null
+  template?: Pick<DataTemplate, 'id' | 'name' | 'code'> & {
+    fields?: DataTemplateField[]
+  }
+  sourceRecord?: Pick<
+    DatabaseRecord,
+    'id' | 'primaryKeyValue' | 'sourceType' | 'sourceName' | 'deletedAt' | 'dataJson'
+  > | null
+  importer?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+  creator?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+  updater?: Pick<UserInfo, 'id' | 'username' | 'name'> | null
+}
+
+export interface ProjectImportResult {
+  totalCount: number
+  createdCount: number
+  skippedCount: number
 }

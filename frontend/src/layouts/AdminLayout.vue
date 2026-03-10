@@ -11,6 +11,9 @@ import {
   Notebook,
   Lock,
   SwitchButton,
+  CollectionTag,
+  DataAnalysis,
+  FolderOpened,
 } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
@@ -33,6 +36,9 @@ const fullMenu: MenuItem[] = [
   { path: '/merchants', label: '商家管理', icon: Shop },
   { path: '/statuses', label: '状态管理', icon: SetUp, roles: ['SUPER'] },
   { path: '/fields', label: '字段管理', icon: Document, roles: ['SUPER'] },
+  { path: '/templates', label: '模板管理', icon: CollectionTag, roles: ['SUPER'] },
+  { path: '/database-records', label: '数据库管理', icon: DataAnalysis, roles: ['SUPER'] },
+  { path: '/projects', label: '项目管理', icon: FolderOpened },
   { path: '/admins', label: '管理员管理', icon: User },
   { path: '/logs', label: '操作日志', icon: Notebook },
 ]
@@ -46,7 +52,10 @@ const menuItems = computed(() => {
   })
 })
 
-const activePath = computed(() => route.path)
+const activePath = computed(() => {
+  const firstPath = route.path.split('/').filter(Boolean)[0]
+  return firstPath ? `/${firstPath}` : route.path
+})
 
 const breadcrumbs = computed(() => {
   return route.matched

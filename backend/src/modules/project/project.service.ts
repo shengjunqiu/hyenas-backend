@@ -7,6 +7,8 @@ import {
 import {
   AdminRole,
   AdminStatus,
+  DataTemplate,
+  DataTemplateField,
   Prisma,
   Project,
   ProjectMemberRole,
@@ -14,18 +16,25 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../auth/interfaces/current-user.interface';
+import { DatabaseRecordTemplateValidatorService } from '../database-record/database-record-template-validator.service';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { AssignProjectAdminDto } from './dto/assign-project-admin.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { ImportProjectRecordsDto } from './dto/import-project-records.dto';
 import { QueryProjectDto } from './dto/query-project.dto';
+import { QueryProjectRecordDto } from './dto/query-project-record.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { UpdateProjectRecordDto } from './dto/update-project-record.dto';
 import { ProjectPermissionService } from './project-permission.service';
+
+type TemplateWithFields = DataTemplate & { fields: DataTemplateField[] };
 
 @Injectable()
 export class ProjectService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectPermissionService: ProjectPermissionService,
+    private readonly templateValidator: DatabaseRecordTemplateValidatorService,
   ) {}
 
   async query(query: QueryProjectDto, operator: CurrentUser) {
@@ -504,6 +513,352 @@ export class ProjectService {
     return null;
   }
 
+  async queryRecords(
+    projectId: number,
+    query: QueryProjectRecordDto,
+    operator: CurrentUser,
+  ) {
+    const project = await this.findProjectWithTemplateOrThrow(
+      projectId,
+      operator,
+    );
+    const where: Prisma.ProjectRecordWhereInput = {
+      projectId,
+      deletedAt: null,
+    };
+
+    if (query.sourcePrimaryKeyValue?.trim()) {
+      where.sourcePrimaryKeyValue = {
+        contains: query.sourcePrimaryKeyValue.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.keyword?.trim()) {
+      where.OR = [
+        {
+          sourcePrimaryKeyValue: {
+            contains: query.keyword.trim(),
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    if (query.createdAtStart || query.createdAtEnd) {
+      where.createdAt = {};
+      if (query.createdAtStart) {
+        where.createdAt.gte = new Date(query.createdAtStart);
+      }
+      if (query.createdAtEnd) {
+        where.createdAt.lte = new Date(query.createdAtEnd);
+      }
+    }
+
+    const { page, pageSize } = query;
+    const skip = (page - 1) * pageSize;
+
+    const [total, list] = await this.prisma.$transaction([
+      this.prisma.projectRecord.count({ where }),
+      this.prisma.projectRecord.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          importer: {
+            select: { id: true, username: true, name: true },
+          },
+          creator: {
+            select: { id: true, username: true, name: true },
+          },
+          updater: {
+            select: { id: true, username: true, name: true },
+          },
+          sourceRecord: {
+            select: {
+              id: true,
+              primaryKeyValue: true,
+              sourceType: true,
+              sourceName: true,
+              deletedAt: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      list,
+      template: {
+        id: project.template.id,
+        name: project.template.name,
+        code: project.template.code,
+        fields: project.template.fields,
+      },
+      pagination: {
+        page,
+        pageSize,
+        total,
+      },
+    };
+  }
+
+  async detailRecord(
+    projectId: number,
+    recordId: number,
+    operator: CurrentUser,
+  ) {
+    await this.projectPermissionService.ensureProjectAccessible(
+      projectId,
+      operator,
+    );
+
+    const record = await this.prisma.projectRecord.findFirst({
+      where: {
+        id: recordId,
+        projectId,
+        deletedAt: null,
+      },
+      include: {
+        template: {
+          include: {
+            fields: {
+              orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+            },
+          },
+        },
+        importer: {
+          select: { id: true, username: true, name: true },
+        },
+        creator: {
+          select: { id: true, username: true, name: true },
+        },
+        updater: {
+          select: { id: true, username: true, name: true },
+        },
+        sourceRecord: {
+          select: {
+            id: true,
+            primaryKeyValue: true,
+            sourceType: true,
+            sourceName: true,
+            dataJson: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException('项目数据不存在');
+    }
+
+    return record;
+  }
+
+  async updateRecord(
+    projectId: number,
+    recordId: number,
+    dto: UpdateProjectRecordDto,
+    operator: CurrentUser,
+  ) {
+    await this.projectPermissionService.ensureProjectAccessible(
+      projectId,
+      operator,
+    );
+    const existing = await this.findProjectRecordWithTemplateOrThrow(
+      recordId,
+      projectId,
+    );
+
+    const nextData =
+      dto.dataJson ?? (existing.dataJson as Record<string, unknown>);
+    const normalized = this.templateValidator.validateAgainstTemplate(
+      existing.template,
+      nextData,
+    );
+
+    const updated = await this.prisma.projectRecord.update({
+      where: { id: recordId },
+      data: {
+        dataJson: normalized.dataJson,
+        updatedBy: operator.id,
+      },
+    });
+
+    await this.writeOperationLog({
+      module: 'PROJECT_RECORD',
+      targetType: 'PROJECT_RECORD',
+      action: 'UPDATE_PROJECT_RECORD',
+      operator,
+      targetId: updated.id,
+      targetName: updated.sourcePrimaryKeyValue,
+      beforeData: this.projectRecordToPlainObject(existing),
+      afterData: this.projectRecordToPlainObject(updated),
+    });
+
+    return updated;
+  }
+
+  async removeRecord(
+    projectId: number,
+    recordId: number,
+    operator: CurrentUser,
+  ) {
+    await this.projectPermissionService.ensureProjectAccessible(
+      projectId,
+      operator,
+    );
+    const existing = await this.findProjectRecordWithTemplateOrThrow(
+      recordId,
+      projectId,
+    );
+
+    await this.prisma.projectRecord.update({
+      where: { id: recordId },
+      data: {
+        deletedAt: new Date(),
+        updatedBy: operator.id,
+      },
+    });
+
+    await this.writeOperationLog({
+      module: 'PROJECT_RECORD',
+      targetType: 'PROJECT_RECORD',
+      action: 'DELETE_PROJECT_RECORD',
+      operator,
+      targetId: existing.id,
+      targetName: existing.sourcePrimaryKeyValue,
+      beforeData: this.projectRecordToPlainObject(existing),
+    });
+
+    return null;
+  }
+
+  async importRecords(
+    projectId: number,
+    dto: ImportProjectRecordsDto,
+    operator: CurrentUser,
+  ) {
+    const project = await this.findProjectWithTemplateOrThrow(
+      projectId,
+      operator,
+      true,
+    );
+    const sourceRecords = await this.prisma.databaseRecord.findMany({
+      where: {
+        id: { in: dto.recordIds },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const sourceRecordMap = new Map(
+      sourceRecords.map((item) => [item.id, item]),
+    );
+    const missingIds = dto.recordIds.filter((id) => !sourceRecordMap.has(id));
+    if (missingIds.length > 0) {
+      throw new BadRequestException(
+        `数据库记录不存在: ${missingIds.join(', ')}`,
+      );
+    }
+
+    const mismatchedIds = sourceRecords
+      .filter((item) => item.templateId !== project.templateId)
+      .map((item) => item.id);
+    if (mismatchedIds.length > 0) {
+      throw new BadRequestException(
+        `存在与项目模板不一致的数据库记录: ${mismatchedIds.join(', ')}`,
+      );
+    }
+
+    const existingRelations = await this.prisma.projectRecord.findMany({
+      where: {
+        projectId,
+        sourceRecordId: { in: dto.recordIds },
+      },
+    });
+    const existingRelationMap = new Map(
+      existingRelations.map((item) => [item.sourceRecordId, item]),
+    );
+
+    let createdCount = 0;
+    let skippedCount = 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const recordId of dto.recordIds) {
+        const sourceRecord = sourceRecordMap.get(recordId)!;
+        const existingRelation = existingRelationMap.get(recordId);
+
+        if (existingRelation && !existingRelation.deletedAt) {
+          skippedCount += 1;
+          continue;
+        }
+
+        if (existingRelation?.deletedAt) {
+          await tx.projectRecord.update({
+            where: { id: existingRelation.id },
+            data: {
+              dataJson: sourceRecord.dataJson as Prisma.InputJsonValue,
+              sourcePrimaryKeyValue: sourceRecord.primaryKeyValue,
+              importedBy: operator.id,
+              updatedBy: operator.id,
+              deletedAt: null,
+            },
+          });
+          createdCount += 1;
+          continue;
+        }
+
+        await tx.projectRecord.create({
+          data: {
+            projectId,
+            templateId: project.templateId,
+            sourceRecordId: sourceRecord.id,
+            sourcePrimaryKeyValue: sourceRecord.primaryKeyValue,
+            dataJson: sourceRecord.dataJson as Prisma.InputJsonValue,
+            importedBy: operator.id,
+            createdBy: operator.id,
+          },
+        });
+        createdCount += 1;
+      }
+
+      await tx.projectImportLog.create({
+        data: {
+          projectId,
+          templateId: project.templateId,
+          recordIdsJson: dto.recordIds as unknown as Prisma.InputJsonValue,
+          totalCount: dto.recordIds.length,
+          createdCount,
+          skippedCount,
+          operatorId: operator.id,
+        },
+      });
+    });
+
+    await this.writeOperationLog({
+      module: 'PROJECT_IMPORT',
+      targetType: 'PROJECT',
+      action: 'IMPORT_PROJECT_RECORDS',
+      operator,
+      targetId: project.id,
+      targetName: project.name,
+      afterData: {
+        recordIds: dto.recordIds,
+        totalCount: dto.recordIds.length,
+        createdCount,
+        skippedCount,
+      } as Prisma.InputJsonValue,
+    });
+
+    return {
+      totalCount: dto.recordIds.length,
+      createdCount,
+      skippedCount,
+    };
+  }
+
   private buildProjectWhere(
     query: QueryProjectDto,
     operator: CurrentUser,
@@ -581,6 +936,41 @@ export class ProjectService {
     return template;
   }
 
+  private async findProjectWithTemplateOrThrow(
+    id: number,
+    operator: CurrentUser,
+    requireAdmin = false,
+  ) {
+    if (requireAdmin) {
+      if (operator.role === AdminRole.SUPER) {
+        await this.findProjectOrThrow(id);
+      } else {
+        await this.projectPermissionService.ensureProjectAdmin(id, operator);
+      }
+    } else {
+      await this.projectPermissionService.ensureProjectAccessible(id, operator);
+    }
+
+    const project = await this.prisma.project.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        template: {
+          include: {
+            fields: {
+              orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+            },
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('项目不存在');
+    }
+
+    return project as typeof project & { template: TemplateWithFields };
+  }
+
   private async findProjectOrThrow(id: number) {
     const project = await this.prisma.project.findFirst({
       where: { id, deletedAt: null },
@@ -591,6 +981,34 @@ export class ProjectService {
     }
 
     return project;
+  }
+
+  private async findProjectRecordWithTemplateOrThrow(
+    recordId: number,
+    projectId: number,
+  ) {
+    const record = await this.prisma.projectRecord.findFirst({
+      where: {
+        id: recordId,
+        projectId,
+        deletedAt: null,
+      },
+      include: {
+        template: {
+          include: {
+            fields: {
+              orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+            },
+          },
+        },
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException('项目数据不存在');
+    }
+
+    return record as typeof record & { template: TemplateWithFields };
   }
 
   private ensureDateRange(startDate?: string | null, endDate?: string | null) {
@@ -641,6 +1059,36 @@ export class ProjectService {
     };
   }
 
+  private projectRecordToPlainObject(record: {
+    id: number;
+    projectId: number;
+    templateId: number;
+    sourceRecordId: number;
+    sourcePrimaryKeyValue: string;
+    dataJson: Prisma.JsonValue;
+    importedBy: number;
+    createdBy: number;
+    updatedBy: number | null;
+    createdAt: Date;
+    updatedAt: Date;
+    deletedAt: Date | null;
+  }) {
+    return {
+      id: record.id,
+      projectId: record.projectId,
+      templateId: record.templateId,
+      sourceRecordId: record.sourceRecordId,
+      sourcePrimaryKeyValue: record.sourcePrimaryKeyValue,
+      dataJson: record.dataJson,
+      importedBy: record.importedBy,
+      createdBy: record.createdBy,
+      updatedBy: record.updatedBy,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      deletedAt: record.deletedAt,
+    };
+  }
+
   private async writeOperationLog(params: {
     action: string;
     operator: CurrentUser;
@@ -649,6 +1097,7 @@ export class ProjectService {
     beforeData?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
     afterData?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
     module?: string;
+    targetType?: string;
   }) {
     const {
       action,
@@ -658,13 +1107,14 @@ export class ProjectService {
       beforeData,
       afterData,
       module,
+      targetType,
     } = params;
 
     await this.prisma.operationLog.create({
       data: {
         module: module ?? 'PROJECT',
         action,
-        targetType: 'PROJECT',
+        targetType: targetType ?? 'PROJECT',
         targetId,
         targetName,
         operatorId: operator.id,

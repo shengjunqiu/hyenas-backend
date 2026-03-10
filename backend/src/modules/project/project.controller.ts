@@ -18,8 +18,11 @@ import type { CurrentUser as CurrentUserInfo } from '../auth/interfaces/current-
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { AssignProjectAdminDto } from './dto/assign-project-admin.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { ImportProjectRecordsDto } from './dto/import-project-records.dto';
 import { QueryProjectDto } from './dto/query-project.dto';
+import { QueryProjectRecordDto } from './dto/query-project-record.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { UpdateProjectRecordDto } from './dto/update-project-record.dto';
 import { ProjectService } from './project.service';
 
 @ApiTags('Projects')
@@ -106,5 +109,56 @@ export class ProjectController {
     @CurrentUser() user: CurrentUserInfo,
   ) {
     return this.projectService.removeMember(id, memberId, user);
+  }
+
+  @Get(':id/records')
+  @ApiOperation({ summary: '项目数据列表' })
+  queryRecords(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: QueryProjectRecordDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.projectService.queryRecords(id, query, user);
+  }
+
+  @Get(':id/records/:recordId')
+  @ApiOperation({ summary: '项目数据详情' })
+  detailRecord(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('recordId', ParseIntPipe) recordId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.projectService.detailRecord(id, recordId, user);
+  }
+
+  @Put(':id/records/:recordId')
+  @ApiOperation({ summary: '编辑项目数据' })
+  updateRecord(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('recordId', ParseIntPipe) recordId: number,
+    @Body() dto: UpdateProjectRecordDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.projectService.updateRecord(id, recordId, dto, user);
+  }
+
+  @Delete(':id/records/:recordId')
+  @ApiOperation({ summary: '删除项目数据' })
+  removeRecord(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('recordId', ParseIntPipe) recordId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.projectService.removeRecord(id, recordId, user);
+  }
+
+  @Post(':id/import-records')
+  @ApiOperation({ summary: '从数据库导入项目数据' })
+  importRecords(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ImportProjectRecordsDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.projectService.importRecords(id, dto, user);
   }
 }

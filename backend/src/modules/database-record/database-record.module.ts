@@ -13,5 +13,6 @@ import { DatabaseRecordTemplateValidatorService } from './database-record-templa
     JwtAuthGuard,
     RolesGuard,
   ],
+  exports: [DatabaseRecordTemplateValidatorService],
 })
 export class DatabaseRecordModule {}

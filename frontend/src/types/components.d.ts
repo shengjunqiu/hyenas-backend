@@ -58,6 +58,8 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     ExcelImportDialog: typeof import('./../components/ExcelImportDialog.vue')['default']
     ModulePlaceholder: typeof import('./../components/ModulePlaceholder.vue')['default']
+    ProjectAdminAssignDialog: typeof import('./../components/ProjectAdminAssignDialog.vue')['default']
+    ProjectMemberDialog: typeof import('./../components/ProjectMemberDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TemplateFieldBuilder: typeof import('./../components/TemplateFieldBuilder.vue')['default']

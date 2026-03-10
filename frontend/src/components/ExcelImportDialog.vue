@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { UploadProps, UploadUserFile } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { importDatabaseRecordsByExcelApi } from '@/api/database-record'
 import { getTemplatesApi } from '@/api/template'
@@ -13,7 +14,7 @@ const emit = defineEmits<{
 const loading = ref(false)
 const templatesLoading = ref(false)
 const templates = ref<DataTemplate[]>([])
-const fileList = ref<Array<{ name: string; raw?: File }>>([])
+const fileList = ref<UploadUserFile[]>([])
 const result = ref<{
   logId: number
   totalCount: number
@@ -48,9 +49,15 @@ watch(
   { immediate: true },
 )
 
-const beforeUpload = (file: File) => {
+const beforeUpload: UploadProps['beforeUpload'] = (file) => {
   form.file = file
-  fileList.value = [{ name: file.name, raw: file }]
+  fileList.value = [
+    {
+      name: file.name,
+      url: '',
+      raw: file,
+    },
+  ]
   return false
 }
 

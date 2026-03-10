@@ -47,6 +47,10 @@ const dynamicColumns = useDynamicColumns(templateFields)
 const canImport = computed(
   () => userStore.isSuper || project.value?.projectAdminId === userStore.user?.id,
 )
+const templateHasNoFields = computed(
+  () => !!project.value?.template && !templateFields.value.length,
+)
+const canEditProjectRecord = computed(() => !templateHasNoFields.value)
 
 const formatDate = (value?: string | null) =>
   value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-'
@@ -107,6 +111,10 @@ const openDetailDrawer = async (recordId: number) => {
 }
 
 const openEditDialog = async (recordId: number) => {
+  if (templateHasNoFields.value) {
+    ElMessage.warning('当前项目模板未配置任何字段，无法编辑项目数据')
+    return
+  }
   editDialogVisible.value = true
   editLoading.value = true
   editingRecord.value = null
@@ -176,6 +184,16 @@ const refreshAfterImport = async () => {
   await Promise.all([fetchProjectDetail(), fetchList()])
 }
 
+const emptyProjectRecordDescription = computed(() => {
+  if (templateHasNoFields.value) {
+    return '当前项目模板未配置字段，请联系超级管理员修复模板'
+  }
+  if (canImport.value) {
+    return '暂无项目数据，可从数据库导入数据'
+  }
+  return '暂无项目数据，请联系项目管理员从数据库导入'
+})
+
 onMounted(() => {
   void fetchPageData()
 })
@@ -189,7 +207,12 @@ onMounted(() => {
       <div class="project-record__toolbar">
         <el-space wrap>
           <el-button @click="router.push(`/projects/${project.id}`)">返回项目详情</el-button>
-          <el-button v-if="canImport" type="primary" @click="importDialogVisible = true">
+          <el-button
+            v-if="canImport"
+            type="primary"
+            :disabled="templateHasNoFields"
+            @click="importDialogVisible = true"
+          >
             从数据库导入
           </el-button>
         </el-space>
@@ -216,6 +239,14 @@ onMounted(() => {
         <el-col :span="12">
           <el-card shadow="never">
             <template #header>模板与数据</template>
+            <el-alert
+              v-if="templateHasNoFields"
+              :closable="false"
+              type="warning"
+              show-icon
+              title="当前项目绑定模板未配置任何字段，模板配置异常，请联系超级管理员修复。"
+              style="margin-bottom: 16px"
+            />
             <el-descriptions :column="1" border>
               <el-descriptions-item label="绑定模板">
                 {{
@@ -236,6 +267,14 @@ onMounted(() => {
         </el-col>
       </el-row>
 
+      <el-alert
+        v-if="!canImport"
+        :closable="false"
+        type="info"
+        show-icon
+        title="当前仅项目管理员或超级管理员可从数据库导入项目数据。"
+      />
+
       <el-form :inline="true" class="filter-form">
         <el-form-item label="关键字">
           <el-input v-model="query.keyword" placeholder="来源主键值" clearable />
@@ -254,7 +293,7 @@ onMounted(() => {
       </el-form>
 
       <el-table v-loading="listLoading" :data="list" border>
-        <template #empty>暂无项目数据</template>
+        <template #empty>{{ emptyProjectRecordDescription }}</template>
         <el-table-column
           prop="sourcePrimaryKeyValue"
           label="来源主键值"
@@ -289,7 +328,14 @@ onMounted(() => {
           <template #default="{ row }">
             <el-space wrap>
               <el-button link type="primary" @click="openDetailDrawer(row.id)">详情</el-button>
-              <el-button link type="warning" @click="openEditDialog(row.id)">编辑</el-button>
+              <el-button
+                link
+                type="warning"
+                :disabled="!canEditProjectRecord"
+                @click="openEditDialog(row.id)"
+              >
+                编辑
+              </el-button>
               <el-button link type="danger" @click="onDelete(row)">删除</el-button>
             </el-space>
           </template>

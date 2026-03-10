@@ -30,6 +30,12 @@ const form = reactive({
 })
 
 const enabledTemplates = computed(() => templates.value.filter((item) => item.isEnabled))
+const resultSummary = computed(() => {
+  if (!result.value) {
+    return ''
+  }
+  return `导入完成，共 ${result.value.totalCount} 条，新增 ${result.value.createdCount} 条，更新 ${result.value.updatedCount} 条，失败 ${result.value.failedCount} 条`
+})
 
 watch(
   visible,
@@ -90,7 +96,7 @@ const onSubmit = async () => {
       templateId: form.templateId,
       file: form.file,
     })
-    ElMessage.success('Excel 导入完成')
+    ElMessage.success(resultSummary.value || 'Excel 导入完成')
     emit('success')
   } finally {
     loading.value = false
@@ -101,6 +107,14 @@ const onSubmit = async () => {
 <template>
   <el-dialog v-model="visible" title="Excel 导入数据库数据" width="760px" @closed="closeDialog">
     <el-form label-width="100px">
+      <el-alert
+        v-if="!enabledTemplates.length"
+        :closable="false"
+        type="warning"
+        show-icon
+        title="当前没有可用模板，请先创建并启用模板后再导入。"
+        style="margin-bottom: 16px"
+      />
       <el-form-item label="模板选择" required>
         <el-select
           v-model="form.templateId"
@@ -136,6 +150,13 @@ const onSubmit = async () => {
 
     <el-card v-if="result" shadow="never" class="excel-import-result">
       <template #header>导入结果</template>
+      <el-alert
+        :closable="false"
+        :type="result.failedCount ? 'warning' : 'success'"
+        show-icon
+        :title="resultSummary"
+        style="margin-bottom: 16px"
+      />
       <el-descriptions :column="4" border>
         <el-descriptions-item label="总数">{{ result.totalCount }}</el-descriptions-item>
         <el-descriptions-item label="新增数">{{ result.createdCount }}</el-descriptions-item>

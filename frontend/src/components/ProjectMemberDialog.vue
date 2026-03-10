@@ -28,6 +28,11 @@ const availableOptions = computed(() => {
   const assignedIds = new Set(memberList.value.map((item) => item.adminId))
   return adminOptions.value.filter((item) => !assignedIds.has(item.id))
 })
+const modeMessage = computed(() =>
+  userStore.isSuper
+    ? '当前为查看模式。超级管理员可分配项目管理员，但仅项目管理员可添加或移除成员。'
+    : '当前为查看模式。仅项目管理员可添加或移除成员。',
+)
 
 const loadData = async () => {
   if (!props.project?.id) {
@@ -106,7 +111,7 @@ const onRemove = async (member: ProjectMember) => {
         :closable="false"
         type="info"
         show-icon
-        title="当前为查看模式。仅项目管理员可添加或移除成员。"
+        :title="modeMessage"
         style="margin-bottom: 16px"
       />
 
@@ -128,6 +133,13 @@ const onRemove = async (member: ProjectMember) => {
             <el-button type="primary" @click="onAdd">添加成员</el-button>
           </div>
         </el-form-item>
+        <el-alert
+          v-if="!availableOptions.length"
+          :closable="false"
+          type="warning"
+          show-icon
+          title="当前没有可分配的子管理员，请先创建或启用子管理员。"
+        />
       </el-form>
 
       <el-table :data="memberList" border>

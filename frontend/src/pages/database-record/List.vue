@@ -45,6 +45,9 @@ const logQuery = reactive({
 const dynamicColumns = useDynamicColumns(() => selectedTemplate.value?.fields)
 
 const enabledTemplates = computed(() => templates.value.filter((item) => item.isEnabled))
+const templateHasNoFields = computed(
+  () => !!selectedTemplate.value && !(selectedTemplate.value.fields || []).length,
+)
 
 const formatDate = (value?: string | null) =>
   value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-'
@@ -159,6 +162,16 @@ const onDelete = async (row: DatabaseRecord) => {
   await fetchList()
 }
 
+const emptyRecordDescription = computed(() => {
+  if (!query.templateId) {
+    return '请先选择模板'
+  }
+  if (templateHasNoFields.value) {
+    return '当前模板未配置字段，请先修复模板配置'
+  }
+  return '暂无数据库数据，可新建数据或使用 Excel 导入'
+})
+
 onMounted(async () => {
   await fetchTemplates()
 
@@ -222,10 +235,17 @@ onMounted(async () => {
       </el-space>
     </div>
 
+    <el-alert
+      v-if="templateHasNoFields"
+      :closable="false"
+      type="warning"
+      show-icon
+      title="当前模板未配置任何字段，模板配置异常。列表可查看基础信息，但新增和导入前建议先修复模板。"
+      style="margin-bottom: 12px"
+    />
+
     <el-table v-loading="loading" :data="list" border>
-      <template #empty>
-        {{ query.templateId ? '暂无数据库数据' : '请先选择模板' }}
-      </template>
+      <template #empty>{{ emptyRecordDescription }}</template>
       <el-table-column prop="primaryKeyValue" label="主键值" min-width="160" fixed="left" />
       <el-table-column
         v-for="field in dynamicColumns"

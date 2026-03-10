@@ -16,8 +16,12 @@ const detail = ref<Project | null>(null)
 const adminDialogVisible = ref(false)
 const memberDialogVisible = ref(false)
 
-const canManageMembers = computed(
-  () => detail.value?.projectAdminId === userStore.user?.id || userStore.isSuper,
+const canManageMembers = computed(() => detail.value?.projectAdminId === userStore.user?.id)
+const templateHasNoFields = computed(
+  () => !!detail.value?.template && !(detail.value.template?.fields || []).length,
+)
+const emptyMemberDescription = computed(() =>
+  canManageMembers.value ? '暂无项目成员，可点击上方按钮添加成员' : '暂无项目成员',
 )
 
 const fetchDetail = async () => {
@@ -61,6 +65,14 @@ onMounted(() => {
 
       <el-card shadow="never">
         <template #header>基础信息</template>
+        <el-alert
+          v-if="templateHasNoFields"
+          :closable="false"
+          type="warning"
+          show-icon
+          title="当前项目绑定的模板未配置任何字段，模板配置异常，请联系超级管理员处理。"
+          style="margin-bottom: 16px"
+        />
         <el-descriptions :column="2" border>
           <el-descriptions-item label="项目名称">{{ detail.name }}</el-descriptions-item>
           <el-descriptions-item label="项目编号">{{ detail.code }}</el-descriptions-item>
@@ -94,7 +106,15 @@ onMounted(() => {
         <el-col :span="12">
           <el-card shadow="never">
             <template #header>项目成员</template>
-            <el-empty v-if="!(detail.members || []).length" description="暂无项目成员" />
+            <el-alert
+              v-if="!canManageMembers"
+              :closable="false"
+              type="info"
+              show-icon
+              title="仅项目管理员可维护项目成员。当前页面为查看模式。"
+              style="margin-bottom: 16px"
+            />
+            <el-empty v-if="!(detail.members || []).length" :description="emptyMemberDescription" />
             <el-table v-else :data="detail.members || []" border>
               <el-table-column label="成员姓名" min-width="140">
                 <template #default="{ row }">{{ row.admin?.name || '-' }}</template>

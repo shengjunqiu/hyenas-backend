@@ -82,6 +82,13 @@ const openAssignDialog = (project: Project) => {
 
 const formatDate = (value?: string | null) =>
   value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-'
+
+const emptyProjectDescription = computed(() => {
+  if (query.keyword || query.templateId || query.status) {
+    return '没有匹配的项目，请调整筛选条件后重试'
+  }
+  return userStore.isSuper ? '暂无项目，可先创建项目' : '暂无可访问项目，请联系超级管理员分配'
+})
 </script>
 
 <template>
@@ -127,7 +134,7 @@ const formatDate = (value?: string | null) =>
     </div>
 
     <el-table v-loading="loading" :data="list" border>
-      <template #empty>暂无项目数据</template>
+      <template #empty>{{ emptyProjectDescription }}</template>
       <el-table-column prop="name" label="项目名称" min-width="180" />
       <el-table-column prop="code" label="项目编号" min-width="160" />
       <el-table-column label="模板" min-width="180">

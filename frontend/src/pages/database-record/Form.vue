@@ -31,6 +31,7 @@ const form = reactive({
 
 const enabledTemplates = computed(() => templates.value.filter((item) => item.isEnabled))
 const templateFields = computed(() => selectedTemplate.value?.fields || [])
+const templateHasNoFields = computed(() => !!selectedTemplate.value && !templateFields.value.length)
 
 const rules: FormRules = {
   templateId: [{ required: true, message: '请选择模板', trigger: 'change' }],
@@ -81,7 +82,10 @@ const buildPayload = () => ({
 const onSubmit = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
   const dynamicValid = templateFields.value.length ? await dynamicFormRef.value?.validate() : true
-  if (!valid || !dynamicValid || !form.templateId) {
+  if (!valid || !dynamicValid || !form.templateId || templateHasNoFields.value) {
+    if (templateHasNoFields.value) {
+      ElMessage.warning('当前模板未配置任何字段，无法录入数据库数据')
+    }
     return
   }
 
@@ -176,7 +180,14 @@ onMounted(async () => {
       <el-card shadow="never">
         <template #header>数据内容</template>
 
-        <el-empty v-if="!templateFields.length" description="请先选择模板" />
+        <el-empty v-if="!form.templateId" description="请先选择模板" />
+        <el-alert
+          v-else-if="templateHasNoFields"
+          :closable="false"
+          type="warning"
+          show-icon
+          title="当前模板未配置任何字段，模板配置异常，暂时无法录入数据。"
+        />
 
         <DynamicDataForm
           v-else
@@ -188,7 +199,12 @@ onMounted(async () => {
 
       <div class="database-record-form__footer">
         <el-button @click="router.back()">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="onSubmit">
+        <el-button
+          type="primary"
+          :loading="submitting"
+          :disabled="templateHasNoFields"
+          @click="onSubmit"
+        >
           {{ isEdit ? '保存修改' : '创建数据' }}
         </el-button>
       </div>

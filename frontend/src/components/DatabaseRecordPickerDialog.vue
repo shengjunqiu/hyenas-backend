@@ -32,9 +32,18 @@ const query = reactive({
 })
 
 const dynamicColumns = useDynamicColumns(() => props.templateFields)
+const templateHasNoFields = computed(
+  () => !!props.templateId && !(props.templateFields || []).length,
+)
 
 const selectedRecords = computed(() => Object.values(selectedRecordMap.value))
 const selectedIds = computed(() => selectedRecords.value.map((item) => item.id))
+const resultSummary = computed(() => {
+  if (!result.value) {
+    return ''
+  }
+  return `导入完成，共选择 ${result.value.totalCount} 条，新增 ${result.value.createdCount} 条，跳过 ${result.value.skippedCount} 条`
+})
 
 const syncTableSelection = async () => {
   await nextTick()
@@ -123,7 +132,7 @@ const onImport = async () => {
     result.value = await importProjectRecordsApi(props.projectId, {
       recordIds: selectedIds.value,
     })
-    ElMessage.success('项目数据导入成功')
+    ElMessage.success(resultSummary.value || '项目数据导入成功')
     emit('success')
   } finally {
     submitting.value = false
@@ -142,6 +151,14 @@ watch([() => visible.value, () => props.templateId], async ([nextVisible]) => {
 <template>
   <el-dialog v-model="visible" title="从数据库导入项目数据" width="1080px" @closed="resetState">
     <template v-if="templateId">
+      <el-alert
+        v-if="templateHasNoFields"
+        :closable="false"
+        type="warning"
+        show-icon
+        title="当前项目模板未配置任何字段，模板配置异常，导入前建议先修复模板。"
+        style="margin-bottom: 16px"
+      />
       <el-form :inline="true" class="filter-form">
         <el-form-item label="关键字">
           <el-input v-model="query.keyword" placeholder="来源名称/主键值" clearable />
@@ -201,6 +218,13 @@ watch([() => visible.value, () => props.templateId], async ([nextVisible]) => {
 
       <el-card v-if="result" shadow="never" class="database-record-picker__result">
         <template #header>导入结果</template>
+        <el-alert
+          :closable="false"
+          :type="result.skippedCount ? 'warning' : 'success'"
+          show-icon
+          :title="resultSummary"
+          style="margin-bottom: 16px"
+        />
         <el-descriptions :column="3" border>
           <el-descriptions-item label="选择总数">{{ result.totalCount }}</el-descriptions-item>
           <el-descriptions-item label="新增数">{{ result.createdCount }}</el-descriptions-item>

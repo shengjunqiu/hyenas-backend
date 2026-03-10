@@ -15,6 +15,8 @@ declare module 'vue' {
     BatchAssignAdminDialog: typeof import('./../components/BatchAssignAdminDialog.vue')['default']
     ChangePasswordDialog: typeof import('./../components/ChangePasswordDialog.vue')['default']
     ChangeStatusDialog: typeof import('./../components/ChangeStatusDialog.vue')['default']
+    DatabaseRecordPickerDialog: typeof import('./../components/DatabaseRecordPickerDialog.vue')['default']
+    DynamicDataForm: typeof import('./../components/DynamicDataForm.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElBreadcrumb: typeof import('element-plus/es')['ElBreadcrumb']

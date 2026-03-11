@@ -29,6 +29,7 @@ watch(
     form.remark = ''
     statuses.value = await getStatusesApi()
   },
+  { immediate: true },
 )
 
 const onSubmit = async () => {

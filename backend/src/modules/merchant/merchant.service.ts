@@ -140,6 +140,15 @@ export class MerchantService {
       },
     });
 
+    await this.prisma.merchantStatusLog.create({
+      data: {
+        merchantId: created.id,
+        fromStatusId: null,
+        toStatusId: created.statusId,
+        changedBy: user.id,
+      },
+    });
+
     if (dto.customFields && Object.keys(dto.customFields).length > 0) {
       await this.validateAndUpsertCustomFields(created.id, dto.customFields);
     }
@@ -163,6 +172,7 @@ export class MerchantService {
   async updateMerchant(id: number, dto: UpdateMerchantDto, user: CurrentUser) {
     const existing = await this.findMerchantOrThrow(id);
     await this.ensureMerchantAccessible(id, user);
+    const nextStatusId = dto.statusId ?? existing.statusId;
 
     if (dto.statusId !== undefined) {
       const status = await this.prisma.merchantStatus.findFirst({
@@ -191,6 +201,17 @@ export class MerchantService {
 
     if (dto.customFields && Object.keys(dto.customFields).length > 0) {
       await this.validateAndUpsertCustomFields(id, dto.customFields);
+    }
+
+    if (nextStatusId !== existing.statusId) {
+      await this.prisma.merchantStatusLog.create({
+        data: {
+          merchantId: id,
+          fromStatusId: existing.statusId,
+          toStatusId: nextStatusId,
+          changedBy: user.id,
+        },
+      });
     }
 
     await this.prisma.operationLog.create({

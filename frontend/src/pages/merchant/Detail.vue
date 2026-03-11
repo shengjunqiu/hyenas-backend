@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { MerchantDetail, MerchantStatusLog } from '@/types'
 import { getMerchantDetailApi } from '@/api/merchant'
 import AssignAdminDialog from '@/components/AssignAdminDialog.vue'
+import AssignSubAdminDialog from '@/components/AssignSubAdminDialog.vue'
 import ChangeStatusDialog from '@/components/ChangeStatusDialog.vue'
 import { useUserStore } from '@/stores/user'
 
@@ -15,6 +16,7 @@ const id = computed(() => Number(route.params.id))
 const loading = ref(false)
 const detail = ref<MerchantDetail | null>(null)
 const showAssignDialog = ref(false)
+const showAssignSubDialog = ref(false)
 const showStatusDialog = ref(false)
 
 const logs = computed(() => (detail.value?.statusLogs || []) as MerchantStatusLog[])
@@ -41,9 +43,18 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
 
     <div style="margin: 12px 0">
       <el-space>
-        <el-button type="primary" @click="router.push(`/merchants/${id}/edit`)">编辑</el-button>
+        <el-button
+          v-if="!userStore.isSubAdmin"
+          type="primary"
+          @click="router.push(`/merchants/${id}/edit`)"
+        >
+          编辑
+        </el-button>
         <el-button @click="showStatusDialog = true">变更状态</el-button>
         <el-button v-role="'SUPER'" @click="showAssignDialog = true">分配管理员</el-button>
+        <el-button v-if="userStore.isNormal" @click="showAssignSubDialog = true">
+          分配子管理员
+        </el-button>
       </el-space>
     </div>
 
@@ -103,6 +114,13 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
         </el-tag>
         <span v-if="!detail?.admins?.length">暂无分配管理员</span>
       </el-space>
+      <el-divider />
+      <el-space wrap>
+        <el-tag v-for="item in detail?.subAdmins || []" :key="item.subAdmin.id" type="success">
+          {{ item.subAdmin.name }}（{{ item.subAdmin.username }}）
+        </el-tag>
+        <span v-if="!detail?.subAdmins?.length">暂无分配子管理员</span>
+      </el-space>
     </el-card>
 
     <el-card shadow="never" style="margin-top: 16px">
@@ -127,6 +145,12 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
     <AssignAdminDialog
       v-if="userStore.isSuper"
       v-model="showAssignDialog"
+      :merchant-id="id"
+      @update:model-value="fetchDetail"
+    />
+    <AssignSubAdminDialog
+      v-if="userStore.isNormal"
+      v-model="showAssignSubDialog"
       :merchant-id="id"
       @update:model-value="fetchDetail"
     />

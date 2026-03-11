@@ -22,12 +22,12 @@ import { MerchantAssignService } from './merchant-assign.service';
 @ApiTags('Merchant Assign')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(AdminRole.SUPER)
 @Controller()
 export class MerchantAssignController {
   constructor(private readonly merchantAssignService: MerchantAssignService) {}
 
   @Post('merchants/batch-assign-admins')
+  @Roles(AdminRole.SUPER)
   @ApiOperation({ summary: '批量给多个商家分配管理员（可多个）' })
   batchAssignAdmins(
     @Body() dto: BatchAssignAdminsDto,
@@ -41,12 +41,14 @@ export class MerchantAssignController {
   }
 
   @Get('merchants/:id/admins')
+  @Roles(AdminRole.SUPER)
   @ApiOperation({ summary: '查看商家已分配管理员' })
   getMerchantAdmins(@Param('id', ParseIntPipe) merchantId: number) {
     return this.merchantAssignService.getMerchantAdmins(merchantId);
   }
 
   @Post('merchants/:id/assign-admins')
+  @Roles(AdminRole.SUPER)
   @ApiOperation({ summary: '给商家分配管理员（可多个）' })
   assignAdmins(
     @Param('id', ParseIntPipe) merchantId: number,
@@ -61,6 +63,7 @@ export class MerchantAssignController {
   }
 
   @Delete('merchants/:id/admins/:adminId')
+  @Roles(AdminRole.SUPER)
   @ApiOperation({ summary: '解除某个管理员分配' })
   unassignAdmin(
     @Param('id', ParseIntPipe) merchantId: number,
@@ -71,8 +74,73 @@ export class MerchantAssignController {
   }
 
   @Get('admins/:id/merchants')
+  @Roles(AdminRole.SUPER)
   @ApiOperation({ summary: '查看某管理员负责的商家列表' })
   getAdminMerchants(@Param('id', ParseIntPipe) adminId: number) {
     return this.merchantAssignService.getAdminMerchants(adminId);
+  }
+
+  @Get('merchants/:id/sub-admins')
+  @Roles(AdminRole.NORMAL)
+  @ApiOperation({ summary: '查看商家已分配子管理员' })
+  getMerchantSubAdmins(
+    @Param('id', ParseIntPipe) merchantId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.getMerchantSubAdmins(merchantId, user);
+  }
+
+  @Post('merchants/:id/assign-sub-admins')
+  @Roles(AdminRole.NORMAL)
+  @ApiOperation({ summary: '给商家分配子管理员（可多个）' })
+  assignSubAdmins(
+    @Param('id', ParseIntPipe) merchantId: number,
+    @Body() dto: AssignAdminsDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.assignSubAdmins(
+      merchantId,
+      dto.adminIds,
+      user,
+    );
+  }
+
+  @Post('merchants/batch-assign-sub-admins')
+  @Roles(AdminRole.NORMAL)
+  @ApiOperation({ summary: '批量给多个商家分配子管理员（可多个）' })
+  batchAssignSubAdmins(
+    @Body() dto: BatchAssignAdminsDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.batchAssignSubAdmins(
+      dto.merchantIds,
+      dto.adminIds,
+      user,
+    );
+  }
+
+  @Delete('merchants/:id/sub-admins/:subAdminId')
+  @Roles(AdminRole.NORMAL)
+  @ApiOperation({ summary: '解除某个子管理员分配' })
+  unassignSubAdmin(
+    @Param('id', ParseIntPipe) merchantId: number,
+    @Param('subAdminId', ParseIntPipe) subAdminId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.unassignSubAdmin(
+      merchantId,
+      subAdminId,
+      user,
+    );
+  }
+
+  @Get('sub-admins/:id/merchants')
+  @Roles(AdminRole.NORMAL)
+  @ApiOperation({ summary: '查看某子管理员负责的商家列表' })
+  getSubAdminMerchants(
+    @Param('id', ParseIntPipe) subAdminId: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantAssignService.getSubAdminMerchants(subAdminId, user);
   }
 }

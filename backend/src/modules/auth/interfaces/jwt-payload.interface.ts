@@ -6,5 +6,6 @@ export interface JwtPayload {
   name: string;
   role: AdminRole;
   status: AdminStatus;
+  parentAdminId?: number | null;
   tokenType: 'access' | 'refresh';
 }

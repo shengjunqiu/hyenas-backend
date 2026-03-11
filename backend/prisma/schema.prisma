@@ -16,6 +16,7 @@ datasource db {
 enum AdminRole {
   SUPER
   NORMAL
+  SUB_ADMIN
 
   @@map("admin_role")
 }
@@ -39,6 +40,12 @@ enum MerchantFieldType {
   @@map("merchant_field_type")
 }
 
+enum MerchantPermissionScope {
+  STATUS_CHANGE
+
+  @@map("merchant_permission_scope")
+}
+
 model Admin {
   id                  Int                 @id @default(autoincrement())
   username            String              @unique
@@ -47,11 +54,20 @@ model Admin {
   phone               String?
   role                AdminRole           @default(NORMAL)
   status              AdminStatus         @default(ENABLED)
+  parentAdminId       Int?                @map("parent_admin_id")
+  createdById         Int?                @map("created_by_id")
   createdAt           DateTime            @default(now()) @map("created_at")
   updatedAt           DateTime            @updatedAt @map("updated_at")
+  parentAdmin         Admin?              @relation("AdminParent", fields: [parentAdminId], references: [id])
+  childAdmins         Admin[]             @relation("AdminParent")
+  creatorAdmin        Admin?              @relation("AdminCreator", fields: [createdById], references: [id])
+  createdAdmins       Admin[]             @relation("AdminCreator")
   createdMerchants    Merchant[]          @relation("MerchantCreatedBy")
   merchantAdmins      MerchantAdmin[]     @relation("MerchantAdminAdmin")
   assignedMerchantOps MerchantAdmin[]     @relation("MerchantAdminAssignedBy")
+  subMerchantAssignments SubAdminMerchant[] @relation("SubAdminMerchantSubAdmin")
+  parentSubMerchantAssignments SubAdminMerchant[] @relation("SubAdminMerchantParent")
+  assignedSubMerchantOps SubAdminMerchant[] @relation("SubAdminMerchantAssignedBy")
   statusChangeLogs    MerchantStatusLog[] @relation("MerchantStatusLogChangedBy")
   operationLogs       OperationLog[]      @relation("OperationLogOperator")
 
@@ -78,6 +94,7 @@ model Merchant {
   creator      Admin                @relation("MerchantCreatedBy", fields: [createdBy], references: [id])
   fieldValues  MerchantFieldValue[]
   admins       MerchantAdmin[]      @relation("MerchantAdminMerchant")
+  subAdmins    SubAdminMerchant[]   @relation("SubAdminMerchantMerchant")
   statusLogs   MerchantStatusLog[]  @relation("MerchantStatusLogMerchant")
 
   @@map("merchants")
@@ -146,6 +163,25 @@ model MerchantAdmin {
 
   @@unique([merchantId, adminId], map: "uniq_merchant_admin")
   @@map("merchant_admins")
+}
+
+model SubAdminMerchant {
+  id              Int                    @id @default(autoincrement())
+  merchantId      Int                    @map("merchant_id")
+  subAdminId      Int                    @map("sub_admin_id")
+  parentAdminId   Int                    @map("parent_admin_id")
+  assignedBy      Int                    @map("assigned_by")
+  permissionScope MerchantPermissionScope @default(STATUS_CHANGE) @map("permission_scope")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  merchant        Merchant               @relation("SubAdminMerchantMerchant", fields: [merchantId], references: [id])
+  subAdmin        Admin                  @relation("SubAdminMerchantSubAdmin", fields: [subAdminId], references: [id])
+  parentAdmin     Admin                  @relation("SubAdminMerchantParent", fields: [parentAdminId], references: [id])
+  assigner        Admin                  @relation("SubAdminMerchantAssignedBy", fields: [assignedBy], references: [id])
+
+  @@unique([merchantId, subAdminId], map: "uniq_sub_admin_merchant")
+  @@index([subAdminId], map: "idx_sub_admin_merchants_sub_admin_id")
+  @@index([parentAdminId], map: "idx_sub_admin_merchants_parent_admin_id")
+  @@map("sub_admin_merchants")
 }
 
 model MerchantStatusLog {

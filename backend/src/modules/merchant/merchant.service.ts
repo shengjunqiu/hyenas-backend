@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -19,6 +18,7 @@ import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../auth/interfaces/current-user.interface';
 import { SUPERVISION_AGENCIES } from './constants/supervision-agencies';
+import { MerchantAccessService } from './merchant-access.service';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateMerchantDto } from './dto/create-merchant.dto';
 import { QueryMerchantDto } from './dto/query-merchant.dto';
@@ -68,7 +68,10 @@ const SUPERVISION_AGENCY_IMPORT_MAP = [
 
 @Injectable()
 export class MerchantService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly merchantAccessService: MerchantAccessService,
+  ) {}
 
   async queryMerchants(query: QueryMerchantDto, user: CurrentUser) {
     const where = this.buildQueryWhere(query, user);
@@ -96,12 +99,28 @@ export class MerchantService {
               },
             },
           },
+          subAdmins: {
+            include: {
+              subAdmin: {
+                select: {
+                  id: true,
+                  username: true,
+                  name: true,
+                  role: true,
+                  status: true,
+                },
+              },
+            },
+          },
         },
       }),
     ]);
 
     return {
-      list,
+      list: list.map((item) => ({
+        ...item,
+        accessLevel: user.role === AdminRole.SUB_ADMIN ? 'STATUS_ONLY' : 'FULL',
+      })),
       pagination: {
         page,
         pageSize,
@@ -111,7 +130,10 @@ export class MerchantService {
   }
 
   async getMerchantDetail(id: number, user: CurrentUser) {
-    await this.ensureMerchantAccessible(id, user);
+    const accessLevel = await this.merchantAccessService.ensureReadableAccess(
+      id,
+      user,
+    );
 
     const merchant = await this.prisma.merchant.findFirst({
       where: { id, deletedAt: null },
@@ -124,6 +146,19 @@ export class MerchantService {
           include: {
             admin: {
               select: { id: true, username: true, name: true, role: true },
+            },
+          },
+        },
+        subAdmins: {
+          include: {
+            subAdmin: {
+              select: {
+                id: true,
+                username: true,
+                name: true,
+                role: true,
+                status: true,
+              },
             },
           },
         },
@@ -154,10 +189,14 @@ export class MerchantService {
     return {
       ...merchant,
       customFields: this.toCustomFieldMap(merchant.fieldValues),
+      accessLevel,
     };
   }
 
-  async importMerchants(file: UploadedExcelFile | undefined, user: CurrentUser) {
+  async importMerchants(
+    file: UploadedExcelFile | undefined,
+    user: CurrentUser,
+  ) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('请上传 Excel 文件');
     }
@@ -248,7 +287,9 @@ export class MerchantService {
     }
 
     if (existingMerchants.length > 1) {
-      throw new BadRequestException('存在多条同名商家，无法自动补全，请先清理重复数据');
+      throw new BadRequestException(
+        '存在多条同名商家，无法自动补全，请先清理重复数据',
+      );
     }
 
     const existing = existingMerchants[0];
@@ -334,7 +375,7 @@ export class MerchantService {
 
   async updateMerchant(id: number, dto: UpdateMerchantDto, user: CurrentUser) {
     const existing = await this.findMerchantOrThrow(id);
-    await this.ensureMerchantAccessible(id, user);
+    await this.merchantAccessService.ensureFullAccess(id, user);
     const nextStatusId = dto.statusId ?? existing.statusId;
 
     if (dto.statusId !== undefined) {
@@ -419,7 +460,7 @@ export class MerchantService {
   }
 
   async getCustomFields(id: number, user: CurrentUser) {
-    await this.ensureMerchantAccessible(id, user);
+    await this.merchantAccessService.ensureReadableAccess(id, user);
     const defs = await this.prisma.merchantFieldDef.findMany({
       orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
     });
@@ -449,7 +490,7 @@ export class MerchantService {
     dto: UpdateMerchantCustomFieldsDto,
     user: CurrentUser,
   ) {
-    await this.ensureMerchantAccessible(id, user);
+    await this.merchantAccessService.ensureFullAccess(id, user);
     const before = this.toCustomFieldMap(
       await this.prisma.merchantFieldValue.findMany({
         where: { merchantId: id },
@@ -484,7 +525,7 @@ export class MerchantService {
 
   async changeStatus(id: number, dto: ChangeStatusDto, user: CurrentUser) {
     const merchant = await this.findMerchantOrThrow(id);
-    await this.ensureMerchantAccessible(id, user);
+    await this.merchantAccessService.ensureStatusAccess(id, user);
 
     const newStatus = await this.prisma.merchantStatus.findFirst({
       where: { id: dto.statusId, isEnabled: true },
@@ -529,7 +570,7 @@ export class MerchantService {
   }
 
   async getStatusLogs(id: number, user: CurrentUser) {
-    await this.ensureMerchantAccessible(id, user);
+    await this.merchantAccessService.ensureStatusAccess(id, user);
     return this.prisma.merchantStatusLog.findMany({
       where: { merchantId: id },
       include: {
@@ -549,6 +590,7 @@ export class MerchantService {
   ): Prisma.MerchantWhereInput {
     const where: Prisma.MerchantWhereInput = {
       deletedAt: null,
+      ...this.merchantAccessService.buildAccessibleWhere(user),
     };
 
     if (query.name?.trim()) {
@@ -592,12 +634,6 @@ export class MerchantService {
           some: { adminId: query.adminId },
         };
       }
-    } else {
-      where.admins = {
-        some: {
-          adminId: user.id,
-        },
-      };
     }
 
     return where;
@@ -611,18 +647,6 @@ export class MerchantService {
       throw new NotFoundException('商家不存在');
     }
     return merchant;
-  }
-
-  private async ensureMerchantAccessible(id: number, user: CurrentUser) {
-    if (user.role === AdminRole.SUPER) {
-      return;
-    }
-    const relation = await this.prisma.merchantAdmin.findFirst({
-      where: { merchantId: id, adminId: user.id },
-    });
-    if (!relation) {
-      throw new ForbiddenException('无访问权限');
-    }
   }
 
   private async validateAndUpsertCustomFields(
@@ -836,7 +860,9 @@ export class MerchantService {
   }
 
   private ensureImportHeaders(headers: string[]) {
-    if (!MERCHANT_IMPORT_HEADERS.name.some((header) => headers.includes(header))) {
+    if (
+      !MERCHANT_IMPORT_HEADERS.name.some((header) => headers.includes(header))
+    ) {
       throw new BadRequestException('Excel 缺少“经营者名称”列');
     }
   }
@@ -851,7 +877,9 @@ export class MerchantService {
     return lookup;
   }
 
-  private resolveDefaultImportStatusId(statuses: MerchantStatus[]): number | undefined {
+  private resolveDefaultImportStatusId(
+    statuses: MerchantStatus[],
+  ): number | undefined {
     return (
       statuses.find((status) => status.code === 'PENDING_REVIEW')?.id ??
       statuses[0]?.id
@@ -868,7 +896,9 @@ export class MerchantService {
       ? this.resolveImportStatusId(statusValue, statusLookup)
       : defaultStatusId;
     if (!statusId) {
-      throw new BadRequestException('状态不存在或未启用，请填写状态名称、编码或 ID');
+      throw new BadRequestException(
+        '状态不存在或未启用，请填写状态名称、编码或 ID',
+      );
     }
 
     const payload: Partial<CreateMerchantDto> = {
@@ -914,6 +944,20 @@ export class MerchantService {
     if (value === null || value === undefined) {
       return undefined;
     }
+
+    if (typeof value === 'object') {
+      return undefined;
+    }
+
+    if (
+      typeof value !== 'string' &&
+      typeof value !== 'number' &&
+      typeof value !== 'boolean' &&
+      typeof value !== 'bigint'
+    ) {
+      return undefined;
+    }
+
     const normalized = String(value).trim();
     return normalized.length > 0 ? normalized : undefined;
   }
@@ -931,10 +975,14 @@ export class MerchantService {
   ): Prisma.MerchantUpdateInput {
     const mergeData: Prisma.MerchantUpdateInput = {};
 
-    if (this.shouldFillExistingValue(existing.creditCode, incoming.creditCode)) {
+    if (
+      this.shouldFillExistingValue(existing.creditCode, incoming.creditCode)
+    ) {
       mergeData.creditCode = incoming.creditCode;
     }
-    if (this.shouldFillExistingValue(existing.contactName, incoming.contactName)) {
+    if (
+      this.shouldFillExistingValue(existing.contactName, incoming.contactName)
+    ) {
       mergeData.contactName = incoming.contactName;
     }
     if (
@@ -972,7 +1020,9 @@ export class MerchantService {
     existingValue?: string | null,
     incomingValue?: string,
   ) {
-    return this.isEmptyValue(existingValue) && !this.isEmptyValue(incomingValue);
+    return (
+      this.isEmptyValue(existingValue) && !this.isEmptyValue(incomingValue)
+    );
   }
 
   private normalizeImportSupervisionAgency(

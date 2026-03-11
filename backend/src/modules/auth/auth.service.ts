@@ -141,6 +141,7 @@ export class AuthService {
       name: admin.name,
       role: admin.role,
       status: admin.status,
+      parentAdminId: admin.parentAdminId,
     };
 
     const accessExpiresIn = this.resolveExpiresIn(
@@ -182,6 +183,7 @@ export class AuthService {
       name: admin.name,
       role: admin.role,
       status: admin.status,
+      parentAdminId: admin.parentAdminId,
     };
   }
 

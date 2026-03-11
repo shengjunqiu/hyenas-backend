@@ -12,7 +12,9 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AssignAdminDialog: typeof import('./../components/AssignAdminDialog.vue')['default']
+    AssignSubAdminDialog: typeof import('./../components/AssignSubAdminDialog.vue')['default']
     BatchAssignAdminDialog: typeof import('./../components/BatchAssignAdminDialog.vue')['default']
+    BatchAssignSubAdminDialog: typeof import('./../components/BatchAssignSubAdminDialog.vue')['default']
     ChangePasswordDialog: typeof import('./../components/ChangePasswordDialog.vue')['default']
     ChangeStatusDialog: typeof import('./../components/ChangeStatusDialog.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']

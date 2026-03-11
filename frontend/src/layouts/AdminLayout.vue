@@ -26,7 +26,7 @@ interface MenuItem {
   path: string
   label: string
   icon: Component
-  roles?: ('SUPER' | 'NORMAL')[]
+  roles?: ('SUPER' | 'NORMAL' | 'SUB_ADMIN')[]
 }
 
 const fullMenu: MenuItem[] = [
@@ -34,6 +34,7 @@ const fullMenu: MenuItem[] = [
   { path: '/statuses', label: '状态管理', icon: SetUp, roles: ['SUPER'] },
   { path: '/fields', label: '字段管理', icon: Document, roles: ['SUPER'] },
   { path: '/admins', label: '管理员管理', icon: User, roles: ['SUPER'] },
+  { path: '/sub-admins', label: '子管理员管理', icon: User, roles: ['NORMAL'] },
   { path: '/logs', label: '操作日志', icon: Notebook },
 ]
 

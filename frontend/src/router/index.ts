@@ -40,7 +40,7 @@ const routes = [
         path: 'merchants/:id/edit',
         name: 'MerchantEdit',
         component: () => import('@/pages/merchant/Form.vue'),
-        meta: { title: '编辑商家' },
+        meta: { title: '编辑商家', roles: ['SUPER', 'NORMAL'] as AdminRole[] },
       },
       {
         path: 'statuses',
@@ -59,6 +59,12 @@ const routes = [
         name: 'AdminList',
         component: () => import('@/pages/admin/List.vue'),
         meta: { title: '管理员管理', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
+        path: 'sub-admins',
+        name: 'SubAdminList',
+        component: () => import('@/pages/sub-admin/List.vue'),
+        meta: { title: '子管理员管理', roles: ['NORMAL'] as AdminRole[] },
       },
       {
         path: 'logs',

@@ -1,5 +1,12 @@
 import { del, get, post, put } from '@/utils/request'
-import type { Merchant, MerchantDetail, MerchantStatusLog, PageResult, Admin } from '@/types'
+import type {
+  Admin,
+  Merchant,
+  MerchantDetail,
+  MerchantPermissionScope,
+  MerchantStatusLog,
+  PageResult,
+} from '@/types'
 
 export interface QueryMerchantParams {
   name?: string
@@ -75,6 +82,23 @@ export interface AdminMerchantItem {
   merchant: Merchant
 }
 
+export interface MerchantSubAdminRelation {
+  id: number
+  merchantId: number
+  subAdminId: number
+  parentAdminId: number
+  assignedBy: number
+  permissionScope: MerchantPermissionScope
+  createdAt: string
+  subAdmin: Admin
+}
+
+export interface SubAdminMerchantItem {
+  assignedAt: string
+  permissionScope: MerchantPermissionScope
+  merchant: Merchant
+}
+
 export interface MerchantImportErrorItem {
   rowNumber: number
   merchantName?: string
@@ -127,8 +151,23 @@ export const assignMerchantAdminsApi = (id: number, payload: AssignAdminsPayload
 export const batchAssignMerchantAdminsApi = (payload: BatchAssignAdminsPayload) =>
   post<BatchAssignAdminsResult>('/merchants/batch-assign-admins', payload)
 
+export const batchAssignMerchantSubAdminsApi = (payload: BatchAssignAdminsPayload) =>
+  post<BatchAssignAdminsResult>('/merchants/batch-assign-sub-admins', payload)
+
 export const unassignMerchantAdminApi = (id: number, adminId: number) =>
   del<null>(`/merchants/${id}/admins/${adminId}`)
 
 export const getAdminMerchantsApi = (id: number) =>
   get<AdminMerchantItem[]>(`/admins/${id}/merchants`)
+
+export const getMerchantSubAdminsApi = (id: number) =>
+  get<MerchantSubAdminRelation[]>(`/merchants/${id}/sub-admins`)
+
+export const assignMerchantSubAdminsApi = (id: number, payload: AssignAdminsPayload) =>
+  post<MerchantSubAdminRelation[]>(`/merchants/${id}/assign-sub-admins`, payload)
+
+export const unassignMerchantSubAdminApi = (id: number, subAdminId: number) =>
+  del<null>(`/merchants/${id}/sub-admins/${subAdminId}`)
+
+export const getSubAdminMerchantsApi = (id: number) =>
+  get<SubAdminMerchantItem[]>(`/sub-admins/${id}/merchants`)

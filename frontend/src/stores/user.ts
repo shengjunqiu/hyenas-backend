@@ -18,6 +18,8 @@ export const useUserStore = defineStore('user', () => {
   )
 
   const isSuper = computed(() => user.value?.role === 'SUPER')
+  const isNormal = computed(() => user.value?.role === 'NORMAL')
+  const isSubAdmin = computed(() => user.value?.role === 'SUB_ADMIN')
   const isLoggedIn = computed(() => !!token.value)
 
   const setAuth = (payload: { accessToken: string; refreshToken: string; user: UserInfo }) => {
@@ -74,6 +76,8 @@ export const useUserStore = defineStore('user', () => {
     refreshToken,
     user,
     isSuper,
+    isNormal,
+    isSubAdmin,
     isLoggedIn,
     login,
     fetchProfile,

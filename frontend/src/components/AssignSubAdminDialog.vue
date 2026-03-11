@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { getAdminsApi } from '@/api/admin'
+import { getSubAdminsApi } from '@/api/sub-admin'
 import {
-  assignMerchantAdminsApi,
-  getMerchantAdminsApi,
-  unassignMerchantAdminApi,
-  type MerchantAdminRelation,
+  assignMerchantSubAdminsApi,
+  getMerchantSubAdminsApi,
+  unassignMerchantSubAdminApi,
+  type MerchantSubAdminRelation,
 } from '@/api/merchant'
 import type { Admin } from '@/types'
 
@@ -13,10 +13,10 @@ const props = defineProps<{ merchantId: number }>()
 const visible = defineModel<boolean>({ required: true })
 const loading = ref(false)
 const adminOptions = ref<Admin[]>([])
-const currentRelations = ref<MerchantAdminRelation[]>([])
+const currentRelations = ref<MerchantSubAdminRelation[]>([])
 const selectedAdminIds = ref<number[]>([])
 
-const assignedAdminIds = computed(() => currentRelations.value.map((item) => item.adminId))
+const assignedAdminIds = computed(() => currentRelations.value.map((item) => item.subAdminId))
 
 const availableOptions = computed(() =>
   adminOptions.value.filter((item) => !assignedAdminIds.value.includes(item.id)),
@@ -29,10 +29,10 @@ const loadData = async () => {
   loading.value = true
   try {
     const [adminRes, relationRes] = await Promise.all([
-      getAdminsApi({ page: 1, pageSize: 100 }),
-      getMerchantAdminsApi(props.merchantId),
+      getSubAdminsApi({ page: 1, pageSize: 100 }),
+      getMerchantSubAdminsApi(props.merchantId),
     ])
-    adminOptions.value = adminRes.list.filter((item) => item.role === 'NORMAL')
+    adminOptions.value = adminRes.list
     currentRelations.value = relationRes
   } finally {
     loading.value = false
@@ -52,13 +52,13 @@ watch(
 
 const onAssign = async () => {
   if (!selectedAdminIds.value.length) {
-    ElMessage.warning('请选择要分配的管理员')
+    ElMessage.warning('请选择要分配的子管理员')
     return
   }
 
   loading.value = true
   try {
-    const res = await assignMerchantAdminsApi(props.merchantId, {
+    const res = await assignMerchantSubAdminsApi(props.merchantId, {
       adminIds: selectedAdminIds.value,
     })
     currentRelations.value = res
@@ -69,11 +69,11 @@ const onAssign = async () => {
   }
 }
 
-const onUnassign = async (adminId: number) => {
+const onUnassign = async (subAdminId: number) => {
   loading.value = true
   try {
-    await unassignMerchantAdminApi(props.merchantId, adminId)
-    currentRelations.value = currentRelations.value.filter((item) => item.adminId !== adminId)
+    await unassignMerchantSubAdminApi(props.merchantId, subAdminId)
+    currentRelations.value = currentRelations.value.filter((item) => item.subAdminId !== subAdminId)
     ElMessage.success('解除分配成功')
   } finally {
     loading.value = false
@@ -82,29 +82,29 @@ const onUnassign = async (adminId: number) => {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="分配管理员" width="560px">
+  <el-dialog v-model="visible" title="分配子管理员" width="560px">
     <div v-loading="loading">
       <el-space wrap>
         <el-tag
           v-for="item in currentRelations"
           :key="item.id"
           closable
-          @close="onUnassign(item.adminId)"
+          @close="onUnassign(item.subAdminId)"
         >
-          {{ item.admin.name }}（{{ item.admin.username }}）
+          {{ item.subAdmin.name }}（{{ item.subAdmin.username }}）
         </el-tag>
       </el-space>
 
       <el-divider />
 
-      <el-form label-width="90px">
-        <el-form-item label="选择管理员">
+      <el-form label-width="100px">
+        <el-form-item label="选择子管理员">
           <el-select
             v-model="selectedAdminIds"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            placeholder="请选择普通管理员"
+            placeholder="请选择子管理员"
             style="width: 100%"
           >
             <el-option

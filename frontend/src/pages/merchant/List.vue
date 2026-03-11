@@ -9,7 +9,9 @@ import { getAdminsApi } from '@/api/admin'
 import { getStatusesApi } from '@/api/status'
 import { SUPERVISION_AGENCIES } from '@/constants/supervision-agencies'
 import AssignAdminDialog from '@/components/AssignAdminDialog.vue'
+import AssignSubAdminDialog from '@/components/AssignSubAdminDialog.vue'
 import BatchAssignAdminDialog from '@/components/BatchAssignAdminDialog.vue'
+import BatchAssignSubAdminDialog from '@/components/BatchAssignSubAdminDialog.vue'
 import ChangeStatusDialog from '@/components/ChangeStatusDialog.vue'
 import MerchantImportDialog from '@/components/MerchantImportDialog.vue'
 
@@ -35,7 +37,9 @@ const query = reactive({
 })
 
 const showAssignDialog = ref(false)
+const showAssignSubDialog = ref(false)
 const showBatchAssignDialog = ref(false)
+const showBatchAssignSubDialog = ref(false)
 const showStatusDialog = ref(false)
 const showImportDialog = ref(false)
 const currentMerchantId = ref<number>(0)
@@ -108,12 +112,25 @@ const openAssign = (row: Merchant) => {
   showAssignDialog.value = true
 }
 
+const openAssignSubAdmin = (row: Merchant) => {
+  currentMerchantId.value = row.id
+  showAssignSubDialog.value = true
+}
+
 const openBatchAssign = () => {
   if (!selectedMerchantIds.value.length) {
     ElMessage.warning('请先选择商户')
     return
   }
   showBatchAssignDialog.value = true
+}
+
+const openBatchAssignSubAdmin = () => {
+  if (!selectedMerchantIds.value.length) {
+    ElMessage.warning('请先选择商户')
+    return
+  }
+  showBatchAssignSubDialog.value = true
 }
 
 const openChangeStatus = (row: Merchant) => {
@@ -124,6 +141,21 @@ const openChangeStatus = (row: Merchant) => {
 
 const onSelectionChange = (rows: Merchant[]) => {
   selectedMerchantIds.value = rows.map((item) => item.id)
+}
+
+const formatAssignedAdmins = (row: Merchant) => {
+  const normalAdmins = row.admins?.map((item) => item.admin.name) ?? []
+  const subAdmins = row.subAdmins?.map((item) => item.subAdmin.name) ?? []
+  const parts: string[] = []
+
+  if (normalAdmins.length) {
+    parts.push(`管理员：${normalAdmins.join('，')}`)
+  }
+  if (subAdmins.length) {
+    parts.push(`子管理员：${subAdmins.join('，')}`)
+  }
+
+  return parts.join('；') || '未分配'
 }
 
 const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm') : '-')
@@ -200,11 +232,19 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       >
         批量分配管理员
       </el-button>
+      <el-button
+        v-if="userStore.isNormal"
+        style="margin-left: 8px"
+        @click="openBatchAssignSubAdmin"
+        :disabled="!selectedMerchantIds.length"
+      >
+        批量分配子管理员
+      </el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border @selection-change="onSelectionChange">
       <template #empty>暂无数据</template>
-      <el-table-column v-if="userStore.isSuper" type="selection" width="48" />
+      <el-table-column v-if="!userStore.isSubAdmin" type="selection" width="48" />
       <el-table-column prop="name" label="经营者名称" min-width="180" />
       <el-table-column prop="contactName" label="法定代表人（负责人）" min-width="150" />
       <el-table-column prop="contactPhone" label="法定代表人联系方式" min-width="160" />
@@ -219,7 +259,7 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       <el-table-column prop="supervisionAgency" label="日常监督管理机构" min-width="180" />
       <el-table-column label="分配管理员" min-width="180">
         <template #default="{ row }">
-          {{ row.admins?.map((item: { admin: Admin }) => item.admin.name).join('，') || '未分配' }}
+          {{ formatAssignedAdmins(row) }}
         </template>
       </el-table-column>
       <el-table-column label="创建时间" min-width="170">
@@ -228,18 +268,31 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       <el-table-column label="更新时间" min-width="170">
         <template #default="{ row }">{{ formatDate(row.updatedAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" fixed="right" min-width="280">
+      <el-table-column label="操作" fixed="right" min-width="320">
         <template #default="{ row }">
           <el-space wrap>
             <el-button link type="primary" @click="router.push(`/merchants/${row.id}`)"
               >详情</el-button
             >
-            <el-button link type="primary" @click="router.push(`/merchants/${row.id}/edit`)">
+            <el-button
+              v-if="!userStore.isSubAdmin"
+              link
+              type="primary"
+              @click="router.push(`/merchants/${row.id}/edit`)"
+            >
               编辑
             </el-button>
             <el-button v-role="'SUPER'" link type="danger" @click="onDelete(row)">删除</el-button>
             <el-button v-role="'SUPER'" link type="primary" @click="openAssign(row)">
               分配管理员
+            </el-button>
+            <el-button
+              v-if="userStore.isNormal"
+              link
+              type="primary"
+              @click="openAssignSubAdmin(row)"
+            >
+              分配子管理员
             </el-button>
             <el-button link type="primary" @click="openChangeStatus(row)">修改状态</el-button>
           </el-space>
@@ -265,8 +318,19 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       :merchant-id="currentMerchantId"
       @update:model-value="fetchList"
     />
+    <AssignSubAdminDialog
+      v-if="currentMerchantId"
+      v-model="showAssignSubDialog"
+      :merchant-id="currentMerchantId"
+      @update:model-value="fetchList"
+    />
     <BatchAssignAdminDialog
       v-model="showBatchAssignDialog"
+      :merchant-ids="selectedMerchantIds"
+      @success="fetchList"
+    />
+    <BatchAssignSubAdminDialog
+      v-model="showBatchAssignSubDialog"
       :merchant-ids="selectedMerchantIds"
       @success="fetchList"
     />

@@ -1,5 +1,7 @@
-export type AdminRole = 'SUPER' | 'NORMAL'
+export type AdminRole = 'SUPER' | 'NORMAL' | 'SUB_ADMIN'
 export type AdminStatus = 'ENABLED' | 'DISABLED'
+export type MerchantAccessLevel = 'FULL' | 'STATUS_ONLY'
+export type MerchantPermissionScope = 'STATUS_CHANGE'
 export type FieldType =
   | 'TEXT'
   | 'TEXTAREA'
@@ -15,6 +17,7 @@ export interface UserInfo {
   name: string
   role: AdminRole
   status?: AdminStatus
+  parentAdminId?: number | null
 }
 
 export interface ApiResponse<T> {
@@ -52,6 +55,7 @@ export interface Admin {
   phone?: string | null
   role: AdminRole
   status: AdminStatus
+  parentAdminId?: number | null
   createdAt: string
   updatedAt?: string
   merchantCount?: number
@@ -98,7 +102,9 @@ export interface Merchant {
   updatedAt: string
   deletedAt?: string | null
   status?: MerchantStatus
+  accessLevel?: MerchantAccessLevel
   admins?: Array<{ admin: Admin }>
+  subAdmins?: Array<{ subAdmin: Admin; permissionScope?: MerchantPermissionScope }>
 }
 
 export interface MerchantDetail extends Merchant {

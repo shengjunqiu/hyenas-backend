@@ -8,10 +8,13 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -54,6 +57,35 @@ export class MerchantController {
   @ApiOperation({ summary: '新增商家' })
   create(@Body() dto: CreateMerchantDto, @CurrentUser() user: CurrentUserInfo) {
     return this.merchantService.createMerchant(dto, user);
+  }
+
+  @Post('import')
+  @Roles(AdminRole.SUPER)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({ summary: 'Excel 导入商家' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Excel 文件，支持 .xlsx 和 .xls',
+        },
+      },
+    },
+  })
+  importMerchants(
+    @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantService.importMerchants(file, user);
   }
 
   @Put(':id')

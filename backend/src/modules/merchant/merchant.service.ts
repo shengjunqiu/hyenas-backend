@@ -4,16 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { ValidationError, validate } from 'class-validator';
 import {
   AdminRole,
   Merchant,
   MerchantFieldDef,
   MerchantFieldType,
   MerchantFieldValue,
+  MerchantStatus,
   Prisma,
 } from '@prisma/client';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../auth/interfaces/current-user.interface';
+import { SUPERVISION_AGENCIES } from './constants/supervision-agencies';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateMerchantDto } from './dto/create-merchant.dto';
 import { QueryMerchantDto } from './dto/query-merchant.dto';
@@ -24,6 +29,42 @@ type FieldValuePayload = {
   valueText: string | null;
   valueJson: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
 };
+
+type UploadedExcelFile = {
+  buffer: Buffer;
+  originalname: string;
+};
+
+type MerchantImportErrorItem = {
+  rowNumber: number;
+  merchantName?: string;
+  reason: string;
+};
+
+const MERCHANT_IMPORT_HEADERS = {
+  name: ['经营者名称'],
+  creditCode: ['统一社会信用代码'],
+  contactName: ['法定代表人（负责人）', '法定代表人', '负责人'],
+  contactPhone: ['法定代表人联系方式', '负责人联系方式', '联系电话'],
+  address: ['经营场所', '地址'],
+  supervisionAgency: ['日常监督管理机构'],
+  licenseNo: ['许可证编号'],
+  businessType: ['餐饮类型', '经营类型'],
+  status: ['状态', '商家状态'],
+  remark: ['备注'],
+} as const;
+
+const SUPERVISION_AGENCY_IMPORT_MAP = [
+  ['宝盖', '宝盖镇市场监督管理所'],
+  ['凤里', '凤里街道市场监督管理所'],
+  ['蚶江', '蚶江镇市场监督管理所'],
+  ['鸿山', '鸿山镇市场监督管理所'],
+  ['湖滨', '湖滨街道市场监督管理所'],
+  ['锦尚', '锦尚镇市场监督管理所'],
+  ['灵秀', '灵秀镇市场监督管理所'],
+  ['祥芝', '祥芝镇市场监督管理所'],
+  ['永宁', '永宁镇市场监督管理所'],
+] as const;
 
 @Injectable()
 export class MerchantService {
@@ -114,6 +155,128 @@ export class MerchantService {
       ...merchant,
       customFields: this.toCustomFieldMap(merchant.fieldValues),
     };
+  }
+
+  async importMerchants(file: UploadedExcelFile | undefined, user: CurrentUser) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('请上传 Excel 文件');
+    }
+    if (!/\.(xlsx|xls)$/i.test(file.originalname)) {
+      throw new BadRequestException('仅支持 .xlsx 或 .xls 格式文件');
+    }
+
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    } catch {
+      throw new BadRequestException('Excel 文件解析失败，请检查文件内容');
+    }
+
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new BadRequestException('Excel 中没有可用工作表');
+    }
+
+    const sheet = workbook.Sheets[firstSheetName];
+    const headers = this.extractImportHeaders(sheet);
+    this.ensureImportHeaders(headers);
+
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+      defval: '',
+      raw: false,
+    });
+    if (!rows.length) {
+      throw new BadRequestException('Excel 中没有可导入的数据');
+    }
+
+    const statuses = await this.prisma.merchantStatus.findMany({
+      where: { isEnabled: true },
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+    });
+    const defaultStatusId = this.resolveDefaultImportStatusId(statuses);
+    if (!defaultStatusId) {
+      throw new BadRequestException('没有可用的启用状态，无法导入商家');
+    }
+    const statusLookup = this.buildImportStatusLookup(statuses);
+    const errors: MerchantImportErrorItem[] = [];
+    let successCount = 0;
+
+    for (const [index, row] of rows.entries()) {
+      const rowNumber = index + 2;
+      const merchantName = this.getImportCell(row, 'name');
+
+      try {
+        const dto = await this.buildImportMerchantDto(
+          row,
+          statusLookup,
+          defaultStatusId,
+        );
+        await this.createOrMergeImportedMerchant(dto, user);
+        successCount += 1;
+      } catch (error) {
+        errors.push({
+          rowNumber,
+          merchantName: merchantName || undefined,
+          reason: this.getImportErrorMessage(error),
+        });
+      }
+    }
+
+    return {
+      total: rows.length,
+      successCount,
+      failureCount: errors.length,
+      errors,
+    };
+  }
+
+  private async createOrMergeImportedMerchant(
+    dto: CreateMerchantDto,
+    user: CurrentUser,
+  ) {
+    const existingMerchants = await this.prisma.merchant.findMany({
+      where: {
+        name: dto.name,
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 2,
+    });
+
+    if (existingMerchants.length === 0) {
+      return this.createMerchant(dto, user);
+    }
+
+    if (existingMerchants.length > 1) {
+      throw new BadRequestException('存在多条同名商家，无法自动补全，请先清理重复数据');
+    }
+
+    const existing = existingMerchants[0];
+    const mergeData = this.buildImportMergeData(existing, dto);
+    if (Object.keys(mergeData).length === 0) {
+      return existing;
+    }
+
+    const updated = await this.prisma.merchant.update({
+      where: { id: existing.id },
+      data: mergeData,
+    });
+
+    await this.prisma.operationLog.create({
+      data: {
+        module: 'MERCHANT',
+        action: 'IMPORT_MERCHANT_MERGE',
+        targetType: 'MERCHANT',
+        targetId: updated.id,
+        targetName: updated.name,
+        operatorId: user.id,
+        operatorName: user.name,
+        beforeData: this.merchantToPlainObject(existing),
+        afterData: this.merchantToPlainObject(updated),
+      },
+    });
+
+    return updated;
   }
 
   async createMerchant(dto: CreateMerchantDto, user: CurrentUser) {
@@ -656,6 +819,223 @@ export class MerchantService {
         return null;
       })
       .filter((item): item is string => !!item);
+  }
+
+  private extractImportHeaders(sheet: XLSX.WorkSheet): string[] {
+    const headerRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+      blankrows: false,
+    });
+    if (!headerRows.length || !Array.isArray(headerRows[0])) {
+      throw new BadRequestException('Excel 文件缺少表头');
+    }
+    return headerRows[0]
+      .map((cell) => this.normalizeImportString(cell))
+      .filter((header): header is string => !!header);
+  }
+
+  private ensureImportHeaders(headers: string[]) {
+    if (!MERCHANT_IMPORT_HEADERS.name.some((header) => headers.includes(header))) {
+      throw new BadRequestException('Excel 缺少“经营者名称”列');
+    }
+  }
+
+  private buildImportStatusLookup(statuses: MerchantStatus[]) {
+    const lookup = new Map<string, number>();
+    for (const status of statuses) {
+      lookup.set(String(status.id), status.id);
+      lookup.set(status.code.trim().toLowerCase(), status.id);
+      lookup.set(status.name.trim().toLowerCase(), status.id);
+    }
+    return lookup;
+  }
+
+  private resolveDefaultImportStatusId(statuses: MerchantStatus[]): number | undefined {
+    return (
+      statuses.find((status) => status.code === 'PENDING_REVIEW')?.id ??
+      statuses[0]?.id
+    );
+  }
+
+  private async buildImportMerchantDto(
+    row: Record<string, unknown>,
+    statusLookup: Map<string, number>,
+    defaultStatusId: number,
+  ): Promise<CreateMerchantDto> {
+    const statusValue = this.getImportCell(row, 'status');
+    const statusId = statusValue
+      ? this.resolveImportStatusId(statusValue, statusLookup)
+      : defaultStatusId;
+    if (!statusId) {
+      throw new BadRequestException('状态不存在或未启用，请填写状态名称、编码或 ID');
+    }
+
+    const payload: Partial<CreateMerchantDto> = {
+      name: this.getImportCell(row, 'name') ?? '',
+      creditCode: this.getImportCell(row, 'creditCode') ?? undefined,
+      contactName: this.getImportCell(row, 'contactName') ?? undefined,
+      contactPhone: this.getImportCell(row, 'contactPhone') ?? undefined,
+      address: this.getImportCell(row, 'address') ?? undefined,
+      supervisionAgency: this.normalizeImportSupervisionAgency(
+        this.getImportCell(row, 'supervisionAgency'),
+      ),
+      licenseNo: this.getImportCell(row, 'licenseNo') ?? undefined,
+      businessType: this.getImportCell(row, 'businessType') ?? undefined,
+      statusId,
+      remark: this.getImportCell(row, 'remark') ?? undefined,
+    };
+
+    const dto = plainToInstance(CreateMerchantDto, payload);
+    const validationErrors = await validate(dto);
+    if (validationErrors.length > 0) {
+      throw new BadRequestException(
+        this.getValidationErrorMessage(validationErrors),
+      );
+    }
+
+    return dto;
+  }
+
+  private getImportCell(
+    row: Record<string, unknown>,
+    field: keyof typeof MERCHANT_IMPORT_HEADERS,
+  ): string | undefined {
+    for (const header of MERCHANT_IMPORT_HEADERS[field]) {
+      const value = this.normalizeImportString(row[header]);
+      if (value) {
+        return value;
+      }
+    }
+    return undefined;
+  }
+
+  private normalizeImportString(value: unknown): string | undefined {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+    const normalized = String(value).trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  private resolveImportStatusId(
+    statusValue: string,
+    statusLookup: Map<string, number>,
+  ): number | undefined {
+    return statusLookup.get(statusValue.trim().toLowerCase());
+  }
+
+  private buildImportMergeData(
+    existing: Merchant,
+    incoming: CreateMerchantDto,
+  ): Prisma.MerchantUpdateInput {
+    const mergeData: Prisma.MerchantUpdateInput = {};
+
+    if (this.shouldFillExistingValue(existing.creditCode, incoming.creditCode)) {
+      mergeData.creditCode = incoming.creditCode;
+    }
+    if (this.shouldFillExistingValue(existing.contactName, incoming.contactName)) {
+      mergeData.contactName = incoming.contactName;
+    }
+    if (
+      this.shouldFillExistingValue(existing.contactPhone, incoming.contactPhone)
+    ) {
+      mergeData.contactPhone = incoming.contactPhone;
+    }
+    if (this.shouldFillExistingValue(existing.address, incoming.address)) {
+      mergeData.address = incoming.address;
+    }
+    if (
+      this.shouldFillExistingValue(
+        existing.supervisionAgency,
+        incoming.supervisionAgency,
+      )
+    ) {
+      mergeData.supervisionAgency = incoming.supervisionAgency;
+    }
+    if (this.shouldFillExistingValue(existing.licenseNo, incoming.licenseNo)) {
+      mergeData.licenseNo = incoming.licenseNo;
+    }
+    if (
+      this.shouldFillExistingValue(existing.businessType, incoming.businessType)
+    ) {
+      mergeData.businessType = incoming.businessType;
+    }
+    if (this.shouldFillExistingValue(existing.remark, incoming.remark)) {
+      mergeData.remark = incoming.remark;
+    }
+
+    return mergeData;
+  }
+
+  private shouldFillExistingValue(
+    existingValue?: string | null,
+    incomingValue?: string,
+  ) {
+    return this.isEmptyValue(existingValue) && !this.isEmptyValue(incomingValue);
+  }
+
+  private normalizeImportSupervisionAgency(
+    supervisionAgency?: string,
+  ): string | undefined {
+    if (!supervisionAgency) {
+      return undefined;
+    }
+
+    const exactMatch = SUPERVISION_AGENCIES.find(
+      (item) => item === supervisionAgency,
+    );
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const normalized = supervisionAgency.replace(/\s+/g, '');
+    const fuzzyMatch = SUPERVISION_AGENCY_IMPORT_MAP.find(([keyword]) =>
+      normalized.includes(keyword),
+    );
+    return fuzzyMatch?.[1] ?? supervisionAgency;
+  }
+
+  private getValidationErrorMessage(errors: ValidationError[]): string {
+    const queue = [...errors];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+      const firstConstraint = current.constraints
+        ? Object.values(current.constraints)[0]
+        : undefined;
+      if (firstConstraint) {
+        return firstConstraint;
+      }
+      if (current.children?.length) {
+        queue.push(...current.children);
+      }
+    }
+    return '导入数据校验失败';
+  }
+
+  private getImportErrorMessage(error: unknown): string {
+    if (error instanceof BadRequestException) {
+      const response = error.getResponse();
+      if (typeof response === 'string') {
+        return response;
+      }
+      if (typeof response === 'object' && response && 'message' in response) {
+        const message = (response as { message?: string | string[] }).message;
+        if (Array.isArray(message)) {
+          return message.join('；');
+        }
+        if (typeof message === 'string') {
+          return message;
+        }
+      }
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return '导入失败';
   }
 
   private toCustomFieldMap(

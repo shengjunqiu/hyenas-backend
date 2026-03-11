@@ -75,12 +75,31 @@ export interface AdminMerchantItem {
   merchant: Merchant
 }
 
+export interface MerchantImportErrorItem {
+  rowNumber: number
+  merchantName?: string
+  reason: string
+}
+
+export interface MerchantImportResult {
+  total: number
+  successCount: number
+  failureCount: number
+  errors: MerchantImportErrorItem[]
+}
+
 export const getMerchantsApi = (params: QueryMerchantParams) =>
   get<PageResult<Merchant>>('/merchants', { params })
 
 export const getMerchantDetailApi = (id: number) => get<MerchantDetail>(`/merchants/${id}`)
 
 export const createMerchantApi = (payload: MerchantPayload) => post<Merchant>('/merchants', payload)
+
+export const importMerchantsApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return post<MerchantImportResult>('/merchants/import', formData)
+}
 
 export const updateMerchantApi = (id: number, payload: MerchantPayload) =>
   put<Merchant>(`/merchants/${id}`, payload)

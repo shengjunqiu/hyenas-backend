@@ -11,6 +11,7 @@ import { SUPERVISION_AGENCIES } from '@/constants/supervision-agencies'
 import AssignAdminDialog from '@/components/AssignAdminDialog.vue'
 import BatchAssignAdminDialog from '@/components/BatchAssignAdminDialog.vue'
 import ChangeStatusDialog from '@/components/ChangeStatusDialog.vue'
+import MerchantImportDialog from '@/components/MerchantImportDialog.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -36,6 +37,7 @@ const query = reactive({
 const showAssignDialog = ref(false)
 const showBatchAssignDialog = ref(false)
 const showStatusDialog = ref(false)
+const showImportDialog = ref(false)
 const currentMerchantId = ref<number>(0)
 const currentStatusId = ref<number | undefined>(undefined)
 const selectedMerchantIds = ref<number[]>([])
@@ -187,6 +189,9 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       <el-button v-role="'SUPER'" type="primary" @click="router.push('/merchants/create')">
         新增商家
       </el-button>
+      <el-button v-role="'SUPER'" style="margin-left: 8px" @click="showImportDialog = true">
+        Excel导入
+      </el-button>
       <el-button
         v-role="'SUPER'"
         style="margin-left: 8px"
@@ -271,6 +276,11 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       v-model="showStatusDialog"
       :merchant-id="currentMerchantId"
       :current-status-id="currentStatusId"
+      @success="fetchList"
+    />
+    <MerchantImportDialog
+      v-model="showImportDialog"
+      :status-options="statuses"
       @success="fetchList"
     />
   </div>

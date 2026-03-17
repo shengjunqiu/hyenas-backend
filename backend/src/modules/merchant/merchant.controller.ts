@@ -26,6 +26,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { CurrentUser as CurrentUserInfo } from '../auth/interfaces/current-user.interface';
+import { BatchDeleteMerchantsDto } from './dto/batch-delete-merchants.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateMerchantDto } from './dto/create-merchant.dto';
 import { QueryMerchantDto } from './dto/query-merchant.dto';
@@ -102,6 +103,23 @@ export class MerchantController {
     @CurrentUser() user: CurrentUserInfo,
   ) {
     return this.merchantService.updateMerchant(id, dto, user);
+  }
+
+  @Post('batch-delete')
+  @Roles(AdminRole.SUPER)
+  @ApiOperation({ summary: '批量删除商家（逻辑删除）' })
+  batchDelete(
+    @Body() dto: BatchDeleteMerchantsDto,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantService.batchDeleteMerchants(dto, user);
+  }
+
+  @Delete()
+  @Roles(AdminRole.SUPER)
+  @ApiOperation({ summary: '清空全部商家（逻辑删除）' })
+  clear(@CurrentUser() user: CurrentUserInfo) {
+    return this.merchantService.clearAllMerchants(user);
   }
 
   @Delete(':id')

@@ -4,7 +4,12 @@ import dayjs from 'dayjs'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import type { Admin, Merchant, MerchantStatus } from '@/types'
-import { deleteMerchantApi, getMerchantsApi } from '@/api/merchant'
+import {
+  batchDeleteMerchantsApi,
+  clearAllMerchantsApi,
+  deleteMerchantApi,
+  getMerchantsApi,
+} from '@/api/merchant'
 import { getAdminsApi } from '@/api/admin'
 import { getStatusesApi } from '@/api/status'
 import { SUPERVISION_AGENCIES } from '@/constants/supervision-agencies'
@@ -18,6 +23,7 @@ import MerchantImportDialog from '@/components/MerchantImportDialog.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
+const clearAllLoading = ref(false)
 const list = ref<Merchant[]>([])
 const total = ref(0)
 const statuses = ref<MerchantStatus[]>([])
@@ -105,6 +111,47 @@ const onDelete = async (row: Merchant) => {
   await deleteMerchantApi(row.id)
   ElMessage.success('删除成功')
   await fetchList()
+}
+
+const onBatchDelete = async () => {
+  if (!selectedMerchantIds.value.length) {
+    ElMessage.warning('请先选择商户')
+    return
+  }
+
+  await ElMessageBox.confirm(
+    `确认批量删除已选中的 ${selectedMerchantIds.value.length} 个商家吗？`,
+    '批量删除确认',
+    {
+      type: 'warning',
+    },
+  )
+
+  const res = await batchDeleteMerchantsApi({
+    merchantIds: selectedMerchantIds.value,
+  })
+  selectedMerchantIds.value = []
+  ElMessage.success(`已删除 ${res.count} 个商家`)
+  await fetchList()
+}
+
+const onClearAll = async () => {
+  await ElMessageBox.confirm('确认清空所有商家吗？该操作会逻辑删除全部商家，且不可恢复。', '清空商家确认', {
+    type: 'warning',
+    confirmButtonText: '确认清空',
+    cancelButtonText: '取消',
+  })
+
+  clearAllLoading.value = true
+  try {
+    const res = await clearAllMerchantsApi()
+    selectedMerchantIds.value = []
+    query.page = 1
+    ElMessage.success(`已清空 ${res.count} 个商家`)
+    await fetchList()
+  } finally {
+    clearAllLoading.value = false
+  }
 }
 
 const openAssign = (row: Merchant) => {
@@ -240,6 +287,25 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       >
         批量分配子管理员
       </el-button>
+      <el-button
+        v-role="'SUPER'"
+        style="margin-left: 8px"
+        type="danger"
+        @click="onBatchDelete"
+        :disabled="!selectedMerchantIds.length"
+      >
+        批量删除
+      </el-button>
+      <el-button
+        v-role="'SUPER'"
+        style="margin-left: 8px"
+        type="danger"
+        plain
+        :loading="clearAllLoading"
+        @click="onClearAll"
+      >
+        清空所有商家
+      </el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border @selection-change="onSelectionChange">
@@ -250,7 +316,11 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       <el-table-column prop="contactPhone" label="法定代表人联系方式" min-width="160" />
       <el-table-column label="商家状态" min-width="140">
         <template #default="{ row }">
-          <el-tag :color="statusMap.get(row.statusId)?.color || '#d9d9d9'" effect="light">
+          <el-tag
+            :color="statusMap.get(row.statusId)?.color || '#d9d9d9'"
+            effect="light"
+            :style="{ color: '#fff' }"
+          >
             {{ statusMap.get(row.statusId)?.name || '-' }}
           </el-tag>
         </template>

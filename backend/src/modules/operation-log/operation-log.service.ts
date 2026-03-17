@@ -48,6 +48,14 @@ export class OperationLogService {
     return log;
   }
 
+  async clearLogs(_user: CurrentUser) {
+    const result = await this.prisma.operationLog.deleteMany();
+
+    return {
+      count: result.count,
+    };
+  }
+
   private buildWhere(
     query: QueryLogDto,
     user: CurrentUser,

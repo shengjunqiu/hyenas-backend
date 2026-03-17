@@ -1,12 +1,18 @@
 <script setup lang="ts">
+import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import { getAdminsApi } from '@/api/admin'
-import { getOperationLogDetailApi, getOperationLogsApi } from '@/api/log'
+import {
+  clearOperationLogsApi,
+  getOperationLogDetailApi,
+  getOperationLogsApi,
+} from '@/api/log'
 import { useUserStore } from '@/stores/user'
 import type { Admin, OperationLog } from '@/types'
 
 const userStore = useUserStore()
 const loading = ref(false)
+const clearLoading = ref(false)
 const detailLoading = ref(false)
 const list = ref<OperationLog[]>([])
 const total = ref(0)
@@ -78,6 +84,26 @@ const openDetail = async (id: number) => {
   }
 }
 
+const onClearLogs = async () => {
+  await ElMessageBox.confirm('确认删除全部操作日志吗？删除后不可恢复。', '清空日志确认', {
+    type: 'warning',
+    confirmButtonText: '确认清空',
+    cancelButtonText: '取消',
+  })
+
+  clearLoading.value = true
+  try {
+    const res = await clearOperationLogsApi()
+    query.page = 1
+    detailVisible.value = false
+    currentDetail.value = null
+    ElMessage.success(`已删除 ${res.count} 条日志`)
+    await fetchList()
+  } finally {
+    clearLoading.value = false
+  }
+}
+
 const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-')
 const formatJson = (val: unknown) => (val == null ? '-' : JSON.stringify(val, null, 2))
 </script>
@@ -123,6 +149,15 @@ const formatJson = (val: unknown) => (val == null ? '-' : JSON.stringify(val, nu
       <el-form-item>
         <el-button type="primary" @click="fetchList">搜索</el-button>
         <el-button @click="onReset">重置</el-button>
+        <el-button
+          v-if="userStore.isSuper"
+          type="danger"
+          plain
+          :loading="clearLoading"
+          @click="onClearLogs"
+        >
+          清空日志
+        </el-button>
       </el-form-item>
     </el-form>
 

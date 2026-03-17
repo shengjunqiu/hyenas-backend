@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
-import { createStatusApi, getStatusesApi, toggleStatusApi, updateStatusApi } from '@/api/status'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  clearAllStatusesApi,
+  createStatusApi,
+  deleteStatusApi,
+  getStatusesApi,
+  toggleStatusApi,
+  updateStatusApi,
+} from '@/api/status'
 import type { MerchantStatus } from '@/types'
 
 const loading = ref(false)
 const submitting = ref(false)
+const clearLoading = ref(false)
 const list = ref<MerchantStatus[]>([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -106,12 +114,49 @@ const onToggle = async (row: MerchantStatus, value: boolean) => {
     row.isEnabled = !value
   }
 }
+
+const onDelete = async (row: MerchantStatus) => {
+  await ElMessageBox.confirm(`确认删除状态“${row.name}”吗？`, '删除确认', {
+    type: 'warning',
+  })
+  await deleteStatusApi(row.id)
+  ElMessage.success('状态删除成功')
+  await fetchList()
+}
+
+const onClearAll = async () => {
+  await ElMessageBox.confirm('确认强制清空所有状态吗？这会同时物理删除全部商家、商家状态流转记录和商家关联数据，且不可恢复。', '强制清空确认', {
+    type: 'warning',
+    confirmButtonText: '确认强制清空',
+    cancelButtonText: '取消',
+  })
+
+  clearLoading.value = true
+  try {
+    const res = await clearAllStatusesApi()
+    ElMessage.success(
+      `已删除 ${res.statusCount} 个状态、${res.merchantCount} 个商家、${res.merchantStatusLogCount} 条状态流转记录`,
+    )
+    await fetchList()
+  } finally {
+    clearLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="page-block">
     <div style="margin-bottom: 12px">
       <el-button type="primary" @click="onCreate">新增状态</el-button>
+      <el-button
+        type="danger"
+        plain
+        style="margin-left: 8px"
+        :loading="clearLoading"
+        @click="onClearAll"
+      >
+        强制清空状态
+      </el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border>
@@ -144,9 +189,10 @@ const onToggle = async (row: MerchantStatus, value: boolean) => {
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="200" />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="onEdit(row)">编辑</el-button>
+          <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

@@ -68,6 +68,14 @@ export interface BatchAssignAdminsResult {
   skippedCount: number
 }
 
+export interface BatchDeleteMerchantsPayload {
+  merchantIds: number[]
+}
+
+export interface BatchDeleteMerchantsResult {
+  count: number
+}
+
 export interface MerchantAdminRelation {
   id: number
   merchantId: number
@@ -129,6 +137,11 @@ export const updateMerchantApi = (id: number, payload: MerchantPayload) =>
   put<Merchant>(`/merchants/${id}`, payload)
 
 export const deleteMerchantApi = (id: number) => del<null>(`/merchants/${id}`)
+
+export const batchDeleteMerchantsApi = (payload: BatchDeleteMerchantsPayload) =>
+  post<BatchDeleteMerchantsResult>('/merchants/batch-delete', payload)
+
+export const clearAllMerchantsApi = () => del<BatchDeleteMerchantsResult>('/merchants')
 
 export const getMerchantCustomFieldsApi = (id: number) =>
   get<MerchantCustomFieldItem[]>(`/merchants/${id}/custom-fields`)

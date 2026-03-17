@@ -1,4 +1,4 @@
-import { get } from '@/utils/request'
+import { del, get } from '@/utils/request'
 import type { OperationLog, PageResult } from '@/types'
 
 export interface QueryLogParams {
@@ -16,3 +16,5 @@ export const getOperationLogsApi = (params: QueryLogParams) =>
   get<PageResult<OperationLog>>('/operation-logs', { params })
 
 export const getOperationLogDetailApi = (id: number) => get<OperationLog>(`/operation-logs/${id}`)
+
+export const clearOperationLogsApi = () => del<{ count: number }>('/operation-logs')

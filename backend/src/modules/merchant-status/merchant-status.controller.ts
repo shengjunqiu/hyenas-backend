@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -33,6 +34,13 @@ export class MerchantStatusController {
     return this.merchantStatusService.list();
   }
 
+  @Delete()
+  @Roles(AdminRole.SUPER)
+  @ApiOperation({ summary: '强制清空状态模板，并清空商家和状态流转记录' })
+  clear(@CurrentUser() user: CurrentUserInfo) {
+    return this.merchantStatusService.clearAll(user);
+  }
+
   @Post()
   @Roles(AdminRole.SUPER)
   @ApiOperation({ summary: '新增状态模板' })
@@ -63,5 +71,15 @@ export class MerchantStatusController {
     @CurrentUser() user: CurrentUserInfo,
   ) {
     return this.merchantStatusService.toggle(id, dto, user);
+  }
+
+  @Delete(':id')
+  @Roles(AdminRole.SUPER)
+  @ApiOperation({ summary: '删除状态模板' })
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.merchantStatusService.remove(id, user);
   }
 }

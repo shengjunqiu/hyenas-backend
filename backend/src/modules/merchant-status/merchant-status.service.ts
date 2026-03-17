@@ -98,6 +98,95 @@ export class MerchantStatusService {
     return updated;
   }
 
+  async remove(id: number, operator: CurrentUser) {
+    const existing = await this.findByIdOrThrow(id);
+    const [merchantCount, statusLogCount] = await this.prisma.$transaction([
+      this.prisma.merchant.count({
+        where: { statusId: id },
+      }),
+      this.prisma.merchantStatusLog.count({
+        where: {
+          OR: [{ fromStatusId: id }, { toStatusId: id }],
+        },
+      }),
+    ]);
+
+    if (merchantCount > 0 || statusLogCount > 0) {
+      throw new BadRequestException('该状态已被使用，不能删除，只能禁用');
+    }
+
+    await this.prisma.merchantStatus.delete({
+      where: { id },
+    });
+
+    await this.writeOperationLog({
+      action: 'DELETE_MERCHANT_STATUS',
+      operator,
+      target: existing,
+      beforeData: this.statusToPlainObject(existing),
+    });
+
+    return null;
+  }
+
+  async clearAll(operator: CurrentUser) {
+    const [
+      statuses,
+      merchantCount,
+      merchantFieldValueCount,
+      merchantAdminCount,
+      subAdminMerchantCount,
+      statusLogCount,
+    ] = await this.prisma.$transaction([
+      this.prisma.merchantStatus.findMany({
+        orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.merchant.count(),
+      this.prisma.merchantFieldValue.count(),
+      this.prisma.merchantAdmin.count(),
+      this.prisma.subAdminMerchant.count(),
+      this.prisma.merchantStatusLog.count(),
+    ]);
+
+    await this.prisma.$transaction([
+      this.prisma.merchantFieldValue.deleteMany(),
+      this.prisma.merchantAdmin.deleteMany(),
+      this.prisma.subAdminMerchant.deleteMany(),
+      this.prisma.merchantStatusLog.deleteMany(),
+      this.prisma.merchant.deleteMany(),
+      this.prisma.merchantStatus.deleteMany(),
+      this.prisma.operationLog.create({
+        data: {
+          module: 'MERCHANT_STATUS',
+          action: 'FORCE_CLEAR_MERCHANT_STATUSES',
+          targetType: 'MERCHANT_STATUS',
+          operatorId: operator.id,
+          operatorName: operator.name,
+          beforeData: {
+            statuses: statuses.map((status) => this.statusToPlainObject(status)),
+            counts: {
+              statuses: statuses.length,
+              merchants: merchantCount,
+              merchantFieldValues: merchantFieldValueCount,
+              merchantAdmins: merchantAdminCount,
+              subAdminMerchants: subAdminMerchantCount,
+              merchantStatusLogs: statusLogCount,
+            },
+          } as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
+
+    return {
+      statusCount: statuses.length,
+      merchantCount,
+      merchantFieldValueCount,
+      merchantAdminCount,
+      subAdminMerchantCount,
+      merchantStatusLogCount: statusLogCount,
+    };
+  }
+
   private async findByIdOrThrow(id: number): Promise<MerchantStatus> {
     const status = await this.prisma.merchantStatus.findUnique({
       where: { id },

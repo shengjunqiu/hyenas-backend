@@ -19,6 +19,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../auth/interfaces/current-user.interface';
 import { SUPERVISION_AGENCIES } from './constants/supervision-agencies';
 import { MerchantAccessService } from './merchant-access.service';
+import { BatchDeleteMerchantsDto } from './dto/batch-delete-merchants.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateMerchantDto } from './dto/create-merchant.dto';
 import { QueryMerchantDto } from './dto/query-merchant.dto';
@@ -437,26 +438,48 @@ export class MerchantService {
 
   async deleteMerchant(id: number, user: CurrentUser) {
     const existing = await this.findMerchantOrThrow(id);
-    const deleted = await this.prisma.merchant.update({
-      where: { id },
-      data: {
-        deletedAt: new Date(),
+    await this.softDeleteMerchants([existing], user);
+    return null;
+  }
+
+  async batchDeleteMerchants(dto: BatchDeleteMerchantsDto, user: CurrentUser) {
+    const merchantIds = [...new Set(dto.merchantIds)];
+    const merchants = await this.prisma.merchant.findMany({
+      where: {
+        id: { in: merchantIds },
+        deletedAt: null,
       },
     });
 
-    await this.prisma.operationLog.create({
-      data: {
-        module: 'MERCHANT',
-        action: 'DELETE_MERCHANT',
-        targetType: 'MERCHANT',
-        targetId: deleted.id,
-        targetName: deleted.name,
-        operatorId: user.id,
-        operatorName: user.name,
-        beforeData: this.merchantToPlainObject(existing),
-      },
+    if (merchants.length !== merchantIds.length) {
+      const foundIds = new Set(merchants.map((item) => item.id));
+      const missingIds = merchantIds.filter((id) => !foundIds.has(id));
+      throw new NotFoundException(
+        `部分商家不存在或已删除：${missingIds.join('、')}`,
+      );
+    }
+
+    await this.softDeleteMerchants(merchants, user);
+
+    return {
+      count: merchants.length,
+    };
+  }
+
+  async clearAllMerchants(user: CurrentUser) {
+    const merchants = await this.prisma.merchant.findMany({
+      where: { deletedAt: null },
     });
-    return null;
+
+    if (merchants.length === 0) {
+      return { count: 0 };
+    }
+
+    await this.softDeleteMerchants(merchants, user);
+
+    return {
+      count: merchants.length,
+    };
   }
 
   async getCustomFields(id: number, user: CurrentUser) {
@@ -647,6 +670,35 @@ export class MerchantService {
       throw new NotFoundException('商家不存在');
     }
     return merchant;
+  }
+
+  private async softDeleteMerchants(merchants: Merchant[], user: CurrentUser) {
+    const merchantIds = merchants.map((item) => item.id);
+    const deletedAt = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.merchant.updateMany({
+        where: {
+          id: { in: merchantIds },
+          deletedAt: null,
+        },
+        data: { deletedAt },
+      }),
+      ...merchants.map((merchant) =>
+        this.prisma.operationLog.create({
+          data: {
+            module: 'MERCHANT',
+            action: 'DELETE_MERCHANT',
+            targetType: 'MERCHANT',
+            targetId: merchant.id,
+            targetName: merchant.name,
+            operatorId: user.id,
+            operatorName: user.name,
+            beforeData: this.merchantToPlainObject(merchant),
+          },
+        }),
+      ),
+    ]);
   }
 
   private async validateAndUpsertCustomFields(

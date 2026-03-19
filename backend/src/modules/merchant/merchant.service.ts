@@ -22,6 +22,7 @@ import { MerchantAccessService } from './merchant-access.service';
 import { BatchDeleteMerchantsDto } from './dto/batch-delete-merchants.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateMerchantDto } from './dto/create-merchant.dto';
+import { ImportMerchantsDto } from './dto/import-merchants.dto';
 import { QueryMerchantDto } from './dto/query-merchant.dto';
 import { UpdateMerchantCustomFieldsDto } from './dto/update-merchant-custom-fields.dto';
 import { UpdateMerchantDto } from './dto/update-merchant.dto';
@@ -40,6 +41,77 @@ type MerchantImportErrorItem = {
   rowNumber: number;
   merchantName?: string;
   reason: string;
+};
+
+type MerchantImportAction =
+  | '新增'
+  | '补全'
+  | '覆盖更新'
+  | '无变更'
+  | '失败';
+
+type MerchantImportRecordItem = {
+  rowNumber: number;
+  merchantName?: string;
+  action: MerchantImportAction;
+  reason?: string;
+};
+
+type MerchantImportDebugItem = {
+  rowNumber: number;
+  merchantName?: string;
+  normalizedRowKeys: string[];
+  parsedValues: {
+    name?: string;
+    contactName?: string;
+    contactPhone?: string;
+    businessType?: string;
+    status?: string;
+  };
+  overwriteExisting: boolean;
+  hasExplicitStatus: boolean;
+  existingMerchant?: {
+    id: number;
+    contactName?: string | null;
+    contactPhone?: string | null;
+    businessType?: string | null;
+    statusId: number;
+  };
+  mergeFields?: string[];
+  action?: MerchantImportAction;
+  reason?: string;
+};
+
+type MerchantImportDebugInfo = {
+  sheetName: string;
+  headerRowNumber: number;
+  rawHeaders: string[];
+  normalizedHeaders: string[];
+  sheetCandidates: Array<{
+    sheetName: string;
+    headerRowNumber: number;
+    matchedHeaderCount: number;
+    rawHeaders: string[];
+  }>;
+  sampleCells: Array<{
+    address: string;
+    value?: string;
+    formula?: string;
+    display?: string;
+  }>;
+  rows: MerchantImportDebugItem[];
+};
+
+type PreparedImportMerchant = {
+  dto: CreateMerchantDto;
+  hasExplicitStatus: boolean;
+  parsedValues: {
+    name?: string;
+    contactName?: string;
+    contactPhone?: string;
+    businessType?: string;
+    status?: string;
+  };
 };
 
 const MERCHANT_IMPORT_HEADERS = {
@@ -196,6 +268,7 @@ export class MerchantService {
 
   async importMerchants(
     file: UploadedExcelFile | undefined,
+    options: ImportMerchantsDto,
     user: CurrentUser,
   ) {
     if (!file?.buffer?.length) {
@@ -217,14 +290,20 @@ export class MerchantService {
       throw new BadRequestException('Excel 中没有可用工作表');
     }
 
-    const sheet = workbook.Sheets[firstSheetName];
-    const headers = this.extractImportHeaders(sheet);
-    this.ensureImportHeaders(headers);
+    const headerMeta = this.selectImportSheet(workbook);
+    const sheet = workbook.Sheets[headerMeta.sheetName];
+    if (!sheet) {
+      throw new BadRequestException('Excel 中没有可用工作表');
+    }
+    this.ensureImportHeaders(headerMeta.normalizedHeaders);
 
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: '',
-      raw: false,
-    });
+    const rows = XLSX.utils
+      .sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: '',
+        raw: false,
+        range: headerMeta.headerRowIndex,
+      })
+      .map((row) => this.normalizeImportRow(row));
     if (!rows.length) {
       throw new BadRequestException('Excel 中没有可导入的数据');
     }
@@ -239,26 +318,70 @@ export class MerchantService {
     }
     const statusLookup = this.buildImportStatusLookup(statuses);
     const errors: MerchantImportErrorItem[] = [];
+    const records: MerchantImportRecordItem[] = [];
+    const debugRows: MerchantImportDebugItem[] = [];
     let successCount = 0;
 
     for (const [index, row] of rows.entries()) {
-      const rowNumber = index + 2;
+      const rowNumber = headerMeta.headerRowIndex + index + 2;
       const merchantName = this.getImportCell(row, 'name');
 
       try {
-        const dto = await this.buildImportMerchantDto(
+        const payload = await this.buildImportMerchantPayload(
           row,
           statusLookup,
           defaultStatusId,
         );
-        await this.createOrMergeImportedMerchant(dto, user);
+        const debugRow = options.debug
+          ? this.createImportDebugRow(rowNumber, row, payload, options)
+          : undefined;
+        const result = await this.createOrMergeImportedMerchant(
+          payload,
+          user,
+          options.overwriteExisting ?? false,
+          debugRow,
+        );
+        records.push({
+          rowNumber,
+          merchantName: merchantName || payload.dto.name,
+          action: result.action,
+        });
+        if (debugRow) {
+          debugRow.action = result.action;
+          debugRows.push(debugRow);
+        }
         successCount += 1;
       } catch (error) {
+        const reason = this.getImportErrorMessage(error);
         errors.push({
           rowNumber,
           merchantName: merchantName || undefined,
-          reason: this.getImportErrorMessage(error),
+          reason,
         });
+        records.push({
+          rowNumber,
+          merchantName: merchantName || undefined,
+          action: '失败',
+          reason,
+        });
+        if (options.debug) {
+          debugRows.push({
+            rowNumber,
+            merchantName: merchantName || undefined,
+            normalizedRowKeys: Object.keys(row),
+            parsedValues: {
+              name: this.getImportCell(row, 'name'),
+              contactName: this.getImportCell(row, 'contactName'),
+              contactPhone: this.getImportCell(row, 'contactPhone'),
+              businessType: this.getImportCell(row, 'businessType'),
+              status: this.getImportCell(row, 'status'),
+            },
+            overwriteExisting: options.overwriteExisting ?? false,
+            hasExplicitStatus: !!this.getImportCell(row, 'status'),
+            action: '失败',
+            reason,
+          });
+        }
       }
     }
 
@@ -267,13 +390,28 @@ export class MerchantService {
       successCount,
       failureCount: errors.length,
       errors,
+      records,
+      debug: options.debug
+        ? {
+            sheetName: headerMeta.sheetName,
+            headerRowNumber: headerMeta.headerRowIndex + 1,
+            rawHeaders: headerMeta.rawHeaders,
+            normalizedHeaders: headerMeta.normalizedHeaders,
+            sheetCandidates: headerMeta.sheetCandidates,
+            sampleCells: this.collectImportSampleCells(sheet),
+            rows: debugRows,
+          }
+        : undefined,
     };
   }
 
   private async createOrMergeImportedMerchant(
-    dto: CreateMerchantDto,
+    payload: PreparedImportMerchant,
     user: CurrentUser,
-  ) {
+    overwriteExisting: boolean,
+    debugRow?: MerchantImportDebugItem,
+  ): Promise<{ action: MerchantImportAction }> {
+    const { dto } = payload;
     const existingMerchants = await this.prisma.merchant.findMany({
       where: {
         name: dto.name,
@@ -284,7 +422,11 @@ export class MerchantService {
     });
 
     if (existingMerchants.length === 0) {
-      return this.createMerchant(dto, user);
+      await this.createMerchant(dto, user);
+      if (debugRow) {
+        debugRow.mergeFields = [];
+      }
+      return { action: '新增' };
     }
 
     if (existingMerchants.length > 1) {
@@ -294,15 +436,49 @@ export class MerchantService {
     }
 
     const existing = existingMerchants[0];
-    const mergeData = this.buildImportMergeData(existing, dto);
-    if (Object.keys(mergeData).length === 0) {
-      return existing;
+    if (debugRow) {
+      debugRow.existingMerchant = {
+        id: existing.id,
+        contactName: existing.contactName,
+        contactPhone: existing.contactPhone,
+        businessType: existing.businessType,
+        statusId: existing.statusId,
+      };
     }
+    const mergeData = this.buildImportMergeData(
+      existing,
+      payload,
+      overwriteExisting,
+    );
+    if (debugRow) {
+      debugRow.mergeFields = this.extractMergeFieldNames(mergeData);
+    }
+    if (Object.keys(mergeData).length === 0) {
+      return { action: '无变更' };
+    }
+
+    const action = this.resolveImportMergeAction(
+      existing,
+      payload,
+      overwriteExisting,
+    );
 
     const updated = await this.prisma.merchant.update({
       where: { id: existing.id },
       data: mergeData,
     });
+
+    if (existing.statusId !== updated.statusId) {
+      await this.prisma.merchantStatusLog.create({
+        data: {
+          merchantId: updated.id,
+          fromStatusId: existing.statusId,
+          toStatusId: updated.statusId,
+          changedBy: user.id,
+          remark: 'Excel 导入覆盖状态',
+        },
+      });
+    }
 
     await this.prisma.operationLog.create({
       data: {
@@ -318,7 +494,7 @@ export class MerchantService {
       },
     });
 
-    return updated;
+    return { action };
   }
 
   async createMerchant(dto: CreateMerchantDto, user: CurrentUser) {
@@ -897,23 +1073,184 @@ export class MerchantService {
       .filter((item): item is string => !!item);
   }
 
-  private extractImportHeaders(sheet: XLSX.WorkSheet): string[] {
+  private selectImportSheet(workbook: XLSX.WorkBook): {
+    sheetName: string;
+    headerRowIndex: number;
+    rawHeaders: string[];
+    normalizedHeaders: string[];
+    sheetCandidates: Array<{
+      sheetName: string;
+      headerRowNumber: number;
+      matchedHeaderCount: number;
+      rawHeaders: string[];
+    }>;
+  } {
+    const candidates = workbook.SheetNames.map((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) {
+        return null;
+      }
+
+      const headerMeta = this.extractImportHeaders(sheet);
+      return {
+        sheetName,
+        headerRowIndex: headerMeta.headerRowIndex,
+        rawHeaders: headerMeta.rawHeaders,
+        normalizedHeaders: headerMeta.normalizedHeaders,
+        matchedHeaderCount: this.countMatchedImportHeaders(
+          headerMeta.normalizedHeaders,
+        ),
+      };
+    }).filter(
+      (
+        candidate,
+      ): candidate is {
+        sheetName: string;
+        headerRowIndex: number;
+        rawHeaders: string[];
+        normalizedHeaders: string[];
+        matchedHeaderCount: number;
+      } => !!candidate,
+    );
+
+    const bestCandidate = [...candidates].sort((a, b) => {
+      if (b.matchedHeaderCount !== a.matchedHeaderCount) {
+        return b.matchedHeaderCount - a.matchedHeaderCount;
+      }
+      return a.headerRowIndex - b.headerRowIndex;
+    })[0];
+
+    if (!bestCandidate) {
+      throw new BadRequestException('Excel 文件缺少表头');
+    }
+
+    return {
+      sheetName: bestCandidate.sheetName,
+      headerRowIndex: bestCandidate.headerRowIndex,
+      rawHeaders: bestCandidate.rawHeaders,
+      normalizedHeaders: bestCandidate.normalizedHeaders,
+      sheetCandidates: candidates.map((candidate) => ({
+        sheetName: candidate.sheetName,
+        headerRowNumber: candidate.headerRowIndex + 1,
+        matchedHeaderCount: candidate.matchedHeaderCount,
+        rawHeaders: candidate.rawHeaders,
+      })),
+    };
+  }
+
+  private extractImportHeaders(sheet: XLSX.WorkSheet): {
+    headerRowIndex: number;
+    rawHeaders: string[];
+    normalizedHeaders: string[];
+  } {
     const headerRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
       header: 1,
       defval: '',
       blankrows: false,
     });
-    if (!headerRows.length || !Array.isArray(headerRows[0])) {
+    if (!headerRows.length) {
       throw new BadRequestException('Excel 文件缺少表头');
     }
-    return headerRows[0]
+
+    const headerRowIndex = this.detectImportHeaderRowIndex(headerRows);
+    const headerRow = headerRows[headerRowIndex];
+    if (!Array.isArray(headerRow)) {
+      throw new BadRequestException('Excel 文件缺少表头');
+    }
+
+    const rawHeaders = headerRow
       .map((cell) => this.normalizeImportString(cell))
       .filter((header): header is string => !!header);
+    const normalizedHeaders = headerRow
+      .map((cell) => this.normalizeImportHeaderKey(cell))
+      .filter((header): header is string => !!header);
+
+    return {
+      headerRowIndex,
+      rawHeaders,
+      normalizedHeaders,
+    };
+  }
+
+  private countMatchedImportHeaders(headers: string[]): number {
+    const knownHeaders = new Set(
+      Object.values(MERCHANT_IMPORT_HEADERS)
+        .flat()
+        .map((header) => this.normalizeImportHeaderKey(header))
+        .filter((header): header is string => !!header),
+    );
+
+    return headers.filter((header) => knownHeaders.has(header)).length;
+  }
+
+  private collectImportSampleCells(sheet: XLSX.WorkSheet) {
+    const addresses = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'A2', 'B2', 'C2', 'D2', 'E2', 'F2', 'G2', 'H2', 'A3', 'B3', 'C3', 'D3', 'E3', 'F3', 'G3', 'H3'];
+
+    return addresses.map((address) => {
+      const cell = sheet[address] as
+        | { v?: unknown; w?: string; f?: string }
+        | undefined;
+
+      return {
+        address,
+        value: this.normalizeImportString(cell?.v),
+        formula: cell?.f,
+        display: this.normalizeImportString(cell?.w),
+      };
+    });
+  }
+
+  private detectImportHeaderRowIndex(rows: unknown[][]): number {
+    const knownHeaders = new Set(
+      Object.values(MERCHANT_IMPORT_HEADERS)
+        .flat()
+        .map((header) => this.normalizeImportHeaderKey(header))
+        .filter((header): header is string => !!header),
+    );
+    const requiredHeaders = new Set(
+      MERCHANT_IMPORT_HEADERS.name
+        .map((header) => this.normalizeImportHeaderKey(header))
+        .filter((header): header is string => !!header),
+    );
+
+    let bestRowIndex = 0;
+    let bestScore = -1;
+
+    rows.slice(0, 10).forEach((row, index) => {
+      if (!Array.isArray(row)) {
+        return;
+      }
+
+      const normalizedCells = row
+        .map((cell) => this.normalizeImportHeaderKey(cell))
+        .filter((cell): cell is string => !!cell);
+
+      if (normalizedCells.length === 0) {
+        return;
+      }
+
+      const matchCount = normalizedCells.filter((cell) =>
+        knownHeaders.has(cell),
+      ).length;
+      const hasRequiredHeader = normalizedCells.some((cell) =>
+        requiredHeaders.has(cell),
+      );
+      const score = matchCount * 10 + (hasRequiredHeader ? 100 : 0);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestRowIndex = index;
+      }
+    });
+
+    return bestRowIndex;
   }
 
   private ensureImportHeaders(headers: string[]) {
     if (
-      !MERCHANT_IMPORT_HEADERS.name.some((header) => headers.includes(header))
+      !MERCHANT_IMPORT_HEADERS.name.some((header) =>
+        headers.includes(this.normalizeImportHeaderKey(header) ?? header),
+      )
     ) {
       throw new BadRequestException('Excel 缺少“经营者名称”列');
     }
@@ -938,11 +1275,11 @@ export class MerchantService {
     );
   }
 
-  private async buildImportMerchantDto(
+  private async buildImportMerchantPayload(
     row: Record<string, unknown>,
     statusLookup: Map<string, number>,
     defaultStatusId: number,
-  ): Promise<CreateMerchantDto> {
+  ): Promise<PreparedImportMerchant> {
     const statusValue = this.getImportCell(row, 'status');
     const statusId = statusValue
       ? this.resolveImportStatusId(statusValue, statusLookup)
@@ -976,7 +1313,17 @@ export class MerchantService {
       );
     }
 
-    return dto;
+    return {
+      dto,
+      hasExplicitStatus: !!statusValue,
+      parsedValues: {
+        name: payload.name,
+        contactName: payload.contactName,
+        contactPhone: payload.contactPhone,
+        businessType: payload.businessType,
+        status: statusValue,
+      },
+    };
   }
 
   private getImportCell(
@@ -984,12 +1331,43 @@ export class MerchantService {
     field: keyof typeof MERCHANT_IMPORT_HEADERS,
   ): string | undefined {
     for (const header of MERCHANT_IMPORT_HEADERS[field]) {
-      const value = this.normalizeImportString(row[header]);
+      const normalizedHeader = this.normalizeImportHeaderKey(header);
+      if (!normalizedHeader) {
+        continue;
+      }
+      const value = this.normalizeImportString(row[normalizedHeader]);
       if (value) {
         return value;
       }
     }
     return undefined;
+  }
+
+  private normalizeImportRow(
+    row: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const normalizedRow: Record<string, unknown> = {};
+    for (const [rawKey, value] of Object.entries(row)) {
+      const normalizedKey = this.normalizeImportHeaderKey(rawKey);
+      if (!normalizedKey || normalizedKey in normalizedRow) {
+        continue;
+      }
+      normalizedRow[normalizedKey] = value;
+    }
+    return normalizedRow;
+  }
+
+  private normalizeImportHeaderKey(value: unknown): string | undefined {
+    const normalized = this.normalizeImportString(value);
+    if (!normalized) {
+      return undefined;
+    }
+
+    const compact = normalized
+      .normalize('NFKC')
+      .replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
+
+    return compact.length > 0 ? compact : undefined;
   }
 
   private normalizeImportString(value: unknown): string | undefined {
@@ -1023,57 +1401,165 @@ export class MerchantService {
 
   private buildImportMergeData(
     existing: Merchant,
-    incoming: CreateMerchantDto,
+    incoming: PreparedImportMerchant,
+    overwriteExisting: boolean,
   ): Prisma.MerchantUpdateInput {
+    const { dto, hasExplicitStatus } = incoming;
     const mergeData: Prisma.MerchantUpdateInput = {};
 
     if (
-      this.shouldFillExistingValue(existing.creditCode, incoming.creditCode)
-    ) {
-      mergeData.creditCode = incoming.creditCode;
-    }
-    if (
-      this.shouldFillExistingValue(existing.contactName, incoming.contactName)
-    ) {
-      mergeData.contactName = incoming.contactName;
-    }
-    if (
-      this.shouldFillExistingValue(existing.contactPhone, incoming.contactPhone)
-    ) {
-      mergeData.contactPhone = incoming.contactPhone;
-    }
-    if (this.shouldFillExistingValue(existing.address, incoming.address)) {
-      mergeData.address = incoming.address;
-    }
-    if (
-      this.shouldFillExistingValue(
-        existing.supervisionAgency,
-        incoming.supervisionAgency,
+      this.shouldApplyImportedValue(
+        existing.creditCode,
+        dto.creditCode,
+        overwriteExisting,
       )
     ) {
-      mergeData.supervisionAgency = incoming.supervisionAgency;
-    }
-    if (this.shouldFillExistingValue(existing.licenseNo, incoming.licenseNo)) {
-      mergeData.licenseNo = incoming.licenseNo;
+      mergeData.creditCode = dto.creditCode;
     }
     if (
-      this.shouldFillExistingValue(existing.businessType, incoming.businessType)
+      this.shouldApplyImportedValue(
+        existing.contactName,
+        dto.contactName,
+        overwriteExisting,
+      )
     ) {
-      mergeData.businessType = incoming.businessType;
+      mergeData.contactName = dto.contactName;
     }
-    if (this.shouldFillExistingValue(existing.remark, incoming.remark)) {
-      mergeData.remark = incoming.remark;
+    if (
+      this.shouldApplyImportedValue(
+        existing.contactPhone,
+        dto.contactPhone,
+        overwriteExisting,
+      )
+    ) {
+      mergeData.contactPhone = dto.contactPhone;
+    }
+    if (
+      this.shouldApplyImportedValue(existing.address, dto.address, overwriteExisting)
+    ) {
+      mergeData.address = dto.address;
+    }
+    if (
+      this.shouldApplyImportedValue(
+        existing.supervisionAgency,
+        dto.supervisionAgency,
+        overwriteExisting,
+      )
+    ) {
+      mergeData.supervisionAgency = dto.supervisionAgency;
+    }
+    if (
+      this.shouldApplyImportedValue(
+        existing.licenseNo,
+        dto.licenseNo,
+        overwriteExisting,
+      )
+    ) {
+      mergeData.licenseNo = dto.licenseNo;
+    }
+    if (
+      this.shouldApplyImportedValue(
+        existing.businessType,
+        dto.businessType,
+        overwriteExisting,
+      )
+    ) {
+      mergeData.businessType = dto.businessType;
+    }
+    if (
+      this.shouldApplyImportedValue(existing.remark, dto.remark, overwriteExisting)
+    ) {
+      mergeData.remark = dto.remark;
+    }
+    if (
+      overwriteExisting &&
+      hasExplicitStatus &&
+      existing.statusId !== dto.statusId
+    ) {
+      mergeData.status = {
+        connect: {
+          id: dto.statusId,
+        },
+      };
     }
 
     return mergeData;
   }
 
-  private shouldFillExistingValue(
+  private resolveImportMergeAction(
+    existing: Merchant,
+    incoming: PreparedImportMerchant,
+    overwriteExisting: boolean,
+  ): Exclude<MerchantImportAction, '新增' | '失败' | '无变更'> {
+    const { dto, hasExplicitStatus } = incoming;
+
+    if (!overwriteExisting) {
+      return '补全';
+    }
+
+    const hasOverwrite =
+      this.isNonEmptyOverwrite(existing.creditCode, dto.creditCode) ||
+      this.isNonEmptyOverwrite(existing.contactName, dto.contactName) ||
+      this.isNonEmptyOverwrite(existing.contactPhone, dto.contactPhone) ||
+      this.isNonEmptyOverwrite(existing.address, dto.address) ||
+      this.isNonEmptyOverwrite(
+        existing.supervisionAgency,
+        dto.supervisionAgency,
+      ) ||
+      this.isNonEmptyOverwrite(existing.licenseNo, dto.licenseNo) ||
+      this.isNonEmptyOverwrite(existing.businessType, dto.businessType) ||
+      this.isNonEmptyOverwrite(existing.remark, dto.remark) ||
+      (hasExplicitStatus && existing.statusId !== dto.statusId);
+
+    return hasOverwrite ? '覆盖更新' : '补全';
+  }
+
+  private createImportDebugRow(
+    rowNumber: number,
+    row: Record<string, unknown>,
+    payload: PreparedImportMerchant,
+    options: ImportMerchantsDto,
+  ): MerchantImportDebugItem {
+    return {
+      rowNumber,
+      merchantName: payload.dto.name,
+      normalizedRowKeys: Object.keys(row),
+      parsedValues: payload.parsedValues,
+      overwriteExisting: options.overwriteExisting ?? false,
+      hasExplicitStatus: payload.hasExplicitStatus,
+    };
+  }
+
+  private extractMergeFieldNames(
+    mergeData: Prisma.MerchantUpdateInput,
+  ): string[] {
+    return Object.keys(mergeData).sort();
+  }
+
+  private shouldApplyImportedValue(
+    existingValue?: string | null,
+    incomingValue?: string,
+    overwriteExisting = false,
+  ) {
+    if (this.isEmptyValue(incomingValue)) {
+      return false;
+    }
+
+    if (overwriteExisting) {
+      return existingValue !== incomingValue;
+    }
+
+    return this.isEmptyValue(existingValue);
+  }
+
+  private isNonEmptyOverwrite(
     existingValue?: string | null,
     incomingValue?: string,
   ) {
     return (
-      this.isEmptyValue(existingValue) && !this.isEmptyValue(incomingValue)
+      !this.isEmptyValue(existingValue) &&
+      !this.isEmptyValue(incomingValue) &&
+      existingValue !== incomingValue
     );
   }
 

@@ -29,6 +29,7 @@ import type { CurrentUser as CurrentUserInfo } from '../auth/interfaces/current-
 import { BatchDeleteMerchantsDto } from './dto/batch-delete-merchants.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateMerchantDto } from './dto/create-merchant.dto';
+import { ImportMerchantsDto } from './dto/import-merchants.dto';
 import { QueryMerchantDto } from './dto/query-merchant.dto';
 import { UpdateMerchantCustomFieldsDto } from './dto/update-merchant-custom-fields.dto';
 import { UpdateMerchantDto } from './dto/update-merchant.dto';
@@ -85,14 +86,19 @@ export class MerchantController {
           format: 'binary',
           description: 'Excel 文件，支持 .xlsx 和 .xls',
         },
+        overwriteExisting: {
+          type: 'boolean',
+          description: '是否使用 Excel 中的非空字段覆盖同名商家的已有信息',
+        },
       },
     },
   })
   importMerchants(
     @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+    @Body() dto: ImportMerchantsDto,
     @CurrentUser() user: CurrentUserInfo,
   ) {
-    return this.merchantService.importMerchants(file, user);
+    return this.merchantService.importMerchants(file, dto, user);
   }
 
   @Put(':id')

@@ -113,11 +113,72 @@ export interface MerchantImportErrorItem {
   reason: string
 }
 
+export type MerchantImportAction = '新增' | '补全' | '覆盖更新' | '无变更' | '失败'
+
+export interface MerchantImportRecordItem {
+  rowNumber: number
+  merchantName?: string
+  action: MerchantImportAction
+  reason?: string
+}
+
+export interface MerchantImportDebugRow {
+  rowNumber: number
+  merchantName?: string
+  normalizedRowKeys: string[]
+  parsedValues: {
+    name?: string
+    contactName?: string
+    contactPhone?: string
+    businessType?: string
+    status?: string
+  }
+  overwriteExisting: boolean
+  hasExplicitStatus: boolean
+  existingMerchant?: {
+    id: number
+    contactName?: string | null
+    contactPhone?: string | null
+    businessType?: string | null
+    statusId: number
+  }
+  mergeFields?: string[]
+  action?: MerchantImportAction
+  reason?: string
+}
+
+export interface MerchantImportDebugInfo {
+  sheetName: string
+  headerRowNumber: number
+  rawHeaders: string[]
+  normalizedHeaders: string[]
+  sheetCandidates: Array<{
+    sheetName: string
+    headerRowNumber: number
+    matchedHeaderCount: number
+    rawHeaders: string[]
+  }>
+  sampleCells: Array<{
+    address: string
+    value?: string
+    formula?: string
+    display?: string
+  }>
+  rows: MerchantImportDebugRow[]
+}
+
 export interface MerchantImportResult {
   total: number
   successCount: number
   failureCount: number
   errors: MerchantImportErrorItem[]
+  records: MerchantImportRecordItem[]
+  debug?: MerchantImportDebugInfo
+}
+
+export interface ImportMerchantsOptions {
+  overwriteExisting?: boolean
+  debug?: boolean
 }
 
 export const getMerchantsApi = (params: QueryMerchantParams) =>
@@ -127,9 +188,11 @@ export const getMerchantDetailApi = (id: number) => get<MerchantDetail>(`/mercha
 
 export const createMerchantApi = (payload: MerchantPayload) => post<Merchant>('/merchants', payload)
 
-export const importMerchantsApi = (file: File) => {
+export const importMerchantsApi = (file: File, options?: ImportMerchantsOptions) => {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('overwriteExisting', String(!!options?.overwriteExisting))
+  formData.append('debug', String(!!options?.debug))
   return post<MerchantImportResult>('/merchants/import', formData)
 }
 

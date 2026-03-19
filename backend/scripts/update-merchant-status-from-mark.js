@@ -48,7 +48,7 @@ function printHelp() {
 选项:
   --file=PATH                JSON 文件路径，默认 ../res/mark.json
   --status-name=NAME         目标状态名称
-  --status-code=CODE         目标状态编码，默认 waiter
+  --status-code=CODE         目标状态编码
   --operator-id=ID           操作人管理员 ID
   --operator-username=NAME   操作人用户名
   --remark=TEXT              状态变更备注
@@ -56,9 +56,9 @@ function printHelp() {
   --help                     查看帮助
 
 示例:
-  node scripts/update-merchant-status-from-mark.js --dry-run
-  node scripts/update-merchant-status-from-mark.js --operator-username=admin
-  node scripts/update-merchant-status-from-mark.js --file=../res/mark.json --status-code=waiter
+  node scripts/update-merchant-status-from-mark.js --dry-run --status-code=push
+  node scripts/update-merchant-status-from-mark.js --status-code=push --operator-username=admin
+  node scripts/update-merchant-status-from-mark.js --file=../res/mark.json --status-name=推流
 `.trim());
 }
 
@@ -66,10 +66,10 @@ function parseArgs(argv) {
   const options = {
     file: path.resolve(__dirname, '../../res/mark.json'),
     statusName: undefined,
-    statusCode: 'waiter',
+    statusCode: undefined,
     operatorId: undefined,
     operatorUsername: undefined,
-    remark: '根据 mark.json 批量更新为推流状态',
+    remark: '根据 mark.json 批量更新状态',
     dryRun: false,
     help: false,
   };
@@ -134,6 +134,10 @@ function parseArgs(argv) {
       default:
         throw new Error(`不支持的参数: --${key}`);
     }
+  }
+
+  if (!options.help && !options.statusCode && !options.statusName) {
+    throw new Error('请通过 --status-code 或 --status-name 指定目标状态');
   }
 
   return options;

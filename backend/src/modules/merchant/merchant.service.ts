@@ -202,6 +202,81 @@ export class MerchantService {
     };
   }
 
+  async exportMerchants(query: QueryMerchantDto, user: CurrentUser) {
+    const where = this.buildQueryWhere(query, user);
+    const merchants = await this.prisma.merchant.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        status: true,
+        admins: {
+          include: {
+            admin: {
+              select: {
+                id: true,
+                username: true,
+                name: true,
+                role: true,
+              },
+            },
+          },
+        },
+        subAdmins: {
+          include: {
+            subAdmin: {
+              select: {
+                id: true,
+                username: true,
+                name: true,
+                role: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const rows: Array<Array<string>> = [
+      [
+        '经营者名称',
+        '统一社会信用代码',
+        '法定代表人（负责人）',
+        '法定代表人联系方式',
+        '经营场所',
+        '日常监督管理机构',
+        '许可证编号',
+        '餐饮类型',
+        '状态',
+        '分配管理员',
+      ],
+      ...merchants.map((merchant) => [
+        merchant.name,
+        merchant.creditCode ?? '',
+        merchant.contactName ?? '',
+        merchant.contactPhone ?? '',
+        merchant.address ?? '',
+        merchant.supervisionAgency ?? '',
+        merchant.licenseNo ?? '',
+        merchant.businessType ?? '',
+        merchant.status?.name ?? '',
+        this.formatAssignedAdminsForExport(merchant),
+      ]),
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, '商家数据');
+
+    return {
+      fileName: `merchants-${user.username}-${this.formatExportTimestamp(new Date())}.xlsx`,
+      buffer: XLSX.write(workbook, {
+        bookType: 'xlsx',
+        type: 'buffer',
+      }) as Buffer,
+    };
+  }
+
   async getMerchantDetail(id: number, user: CurrentUser) {
     const accessLevel = await this.merchantAccessService.ensureReadableAccess(
       id,
@@ -836,6 +911,35 @@ export class MerchantService {
     }
 
     return where;
+  }
+
+  private formatAssignedAdminsForExport(merchant: {
+    admins?: Array<{ admin: { name: string } }>;
+    subAdmins?: Array<{ subAdmin: { name: string } }>;
+  }) {
+    const normalAdmins = merchant.admins?.map((item) => item.admin.name) ?? [];
+    const subAdmins = merchant.subAdmins?.map((item) => item.subAdmin.name) ?? [];
+    const parts: string[] = [];
+
+    if (normalAdmins.length) {
+      parts.push(`管理员：${normalAdmins.join('，')}`);
+    }
+    if (subAdmins.length) {
+      parts.push(`子管理员：${subAdmins.join('，')}`);
+    }
+
+    return parts.join('；') || '未分配';
+  }
+
+  private formatExportTimestamp(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    const second = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}${month}${day}${hour}${minute}${second}`;
   }
 
   private async findMerchantOrThrow(id: number): Promise<Merchant> {

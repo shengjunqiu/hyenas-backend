@@ -8,6 +8,7 @@ import {
   batchDeleteMerchantsApi,
   clearAllMerchantsApi,
   deleteMerchantApi,
+  exportMerchantsApi,
   getMerchantsApi,
 } from '@/api/merchant'
 import { getAdminsApi } from '@/api/admin'
@@ -23,6 +24,7 @@ import MerchantImportDialog from '@/components/MerchantImportDialog.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
+const exportLoading = ref(false)
 const clearAllLoading = ref(false)
 const list = ref<Merchant[]>([])
 const total = ref(0)
@@ -54,27 +56,67 @@ const selectedMerchantIds = ref<number[]>([])
 
 const statusMap = computed(() => new Map(statuses.value.map((s) => [s.id, s])))
 
+const buildQueryParams = () => {
+  return {
+    name: query.name || undefined,
+    contactName: query.contactName || undefined,
+    contactPhone: query.contactPhone || undefined,
+    statusId: query.statusId,
+    businessType: query.businessType || undefined,
+    supervisionAgency: query.supervisionAgency || undefined,
+    adminId: userStore.isSuper ? query.adminId : undefined,
+    createdAtStart: query.dateRange[0],
+    createdAtEnd: query.dateRange[1],
+    page: query.page,
+    pageSize: query.pageSize,
+  }
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
-    const params = {
-      name: query.name || undefined,
-      contactName: query.contactName || undefined,
-      contactPhone: query.contactPhone || undefined,
-      statusId: query.statusId,
-      businessType: query.businessType || undefined,
-      supervisionAgency: query.supervisionAgency || undefined,
-      adminId: userStore.isSuper ? query.adminId : undefined,
-      createdAtStart: query.dateRange[0],
-      createdAtEnd: query.dateRange[1],
-      page: query.page,
-      pageSize: query.pageSize,
-    }
-    const res = await getMerchantsApi(params)
+    const res = await getMerchantsApi(buildQueryParams())
     list.value = res.list
     total.value = res.pagination.total
   } finally {
     loading.value = false
+  }
+}
+
+const resolveFileName = (contentDisposition?: string) => {
+  if (!contentDisposition) {
+    return 'merchants.xlsx'
+  }
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1])
+  }
+
+  const plainMatch = contentDisposition.match(/filename="([^"]+)"/i)
+  if (plainMatch?.[1]) {
+    return plainMatch[1]
+  }
+
+  return 'merchants.xlsx'
+}
+
+const onExport = async () => {
+  exportLoading.value = true
+  try {
+    const response = await exportMerchantsApi(buildQueryParams())
+    const fileName = resolveFileName(response.headers['content-disposition'])
+    const url = window.URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } finally {
+    exportLoading.value = false
   }
 }
 
@@ -270,6 +312,9 @@ const formatDate = (val?: string | null) => (val ? dayjs(val).format('YYYY-MM-DD
       </el-button>
       <el-button v-role="'SUPER'" style="margin-left: 8px" @click="showImportDialog = true">
         Excel导入
+      </el-button>
+      <el-button style="margin-left: 8px" :loading="exportLoading" @click="onExport">
+        导出商家
       </el-button>
       <el-button
         v-role="'SUPER'"

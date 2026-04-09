@@ -1,4 +1,4 @@
-import { del, get, post, put } from '@/utils/request'
+import { del, download, get, post, put } from '@/utils/request'
 import type {
   Admin,
   Merchant,
@@ -183,6 +183,9 @@ export interface ImportMerchantsOptions {
 
 export const getMerchantsApi = (params: QueryMerchantParams) =>
   get<PageResult<Merchant>>('/merchants', { params })
+
+export const exportMerchantsApi = (params: QueryMerchantParams) =>
+  download('/merchants/export', { params })
 
 export const getMerchantDetailApi = (id: number) => get<MerchantDetail>(`/merchants/${id}`)
 

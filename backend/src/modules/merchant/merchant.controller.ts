@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -41,6 +43,26 @@ import { MerchantService } from './merchant.service';
 @Controller('merchants')
 export class MerchantController {
   constructor(private readonly merchantService: MerchantService) {}
+
+  @Get('export')
+  @ApiOperation({ summary: '导出当前用户可见商家 Excel' })
+  async exportMerchants(
+    @Query() query: QueryMerchantDto,
+    @CurrentUser() user: CurrentUserInfo,
+    @Res() res: Response,
+  ) {
+    const file = await this.merchantService.exportMerchants(query, user);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
 
   @Get()
   @ApiOperation({ summary: '商家列表（分页、筛选、数据权限）' })

@@ -43,6 +43,12 @@ const routes = [
         meta: { title: '编辑商家', roles: ['SUPER', 'NORMAL'] as AdminRole[] },
       },
       {
+        path: 'statistics',
+        name: 'StatisticsOverview',
+        component: () => import('@/pages/statistics/Overview.vue'),
+        meta: { title: '数据统计', roles: ['SUPER'] as AdminRole[] },
+      },
+      {
         path: 'statuses',
         name: 'StatusList',
         component: () => import('@/pages/status/List.vue'),

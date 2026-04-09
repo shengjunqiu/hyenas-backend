@@ -7,10 +7,12 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -30,6 +32,55 @@ import { UpdateAdminDto } from './dto/update-admin.dto';
 @Controller('admins')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  @Get('statistics/merchant-status')
+  @ApiOperation({ summary: '超级管理员商家状态统计' })
+  getMerchantStatusStatistics(@CurrentUser() user: CurrentUserInfo) {
+    return this.adminService.getMerchantStatusStatistics(user);
+  }
+
+  @Get('statistics/merchant-status/export')
+  @ApiOperation({ summary: '导出管理员分组商家状态统计 Excel' })
+  async exportMerchantStatusStatistics(
+    @CurrentUser() user: CurrentUserInfo,
+    @Res() res: Response,
+  ) {
+    const file =
+      await this.adminService.exportAdminGroupedMerchantStatusStatistics(user);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
+
+  @Get(':id/statistics/merchant-status/export')
+  @ApiOperation({ summary: '导出单个管理员商家状态统计 Excel' })
+  async exportSingleAdminMerchantStatusStatistics(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserInfo,
+    @Res() res: Response,
+  ) {
+    const file = await this.adminService.exportSingleAdminMerchantStatusStatistics(
+      id,
+      user,
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
 
   @Get()
   @ApiOperation({ summary: '管理员列表（分页、搜索）' })

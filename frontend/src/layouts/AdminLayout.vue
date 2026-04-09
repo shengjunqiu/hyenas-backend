@@ -9,6 +9,7 @@ import {
   Document,
   User,
   Notebook,
+  PieChart,
   Lock,
   SwitchButton,
 } from '@element-plus/icons-vue'
@@ -31,6 +32,7 @@ interface MenuItem {
 
 const fullMenu: MenuItem[] = [
   { path: '/merchants', label: '商家管理', icon: Shop },
+  { path: '/statistics', label: '数据统计', icon: PieChart, roles: ['SUPER'] },
   { path: '/statuses', label: '状态管理', icon: SetUp, roles: ['SUPER'] },
   { path: '/fields', label: '字段管理', icon: Document, roles: ['SUPER'] },
   { path: '/admins', label: '管理员管理', icon: User, roles: ['SUPER'] },

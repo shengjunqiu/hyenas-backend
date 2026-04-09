@@ -1,5 +1,11 @@
-import { get, post, put } from '@/utils/request'
-import type { Admin, AdminRole, AdminStatus, PageResult } from '@/types'
+import { download, get, post, put } from '@/utils/request'
+import type {
+  Admin,
+  AdminRole,
+  AdminStatus,
+  MerchantStatusStatistics,
+  PageResult,
+} from '@/types'
 
 export interface QueryAdminParams {
   keyword?: string
@@ -35,3 +41,12 @@ export const updateAdminStatusApi = (id: number, status: AdminStatus) =>
 
 export const resetAdminPasswordApi = (id: number, newPassword: string) =>
   post<null>(`/admins/${id}/reset-password`, { newPassword })
+
+export const getMerchantStatusStatisticsApi = () =>
+  get<MerchantStatusStatistics>('/admins/statistics/merchant-status')
+
+export const exportAdminGroupStatisticsApi = () =>
+  download('/admins/statistics/merchant-status/export')
+
+export const exportSingleAdminGroupStatisticsApi = (id: number) =>
+  download(`/admins/${id}/statistics/merchant-status/export`)

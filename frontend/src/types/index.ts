@@ -61,6 +61,33 @@ export interface Admin {
   merchantCount?: number
 }
 
+export interface MerchantStatusStatItem {
+  statusId: number
+  statusName: string
+  statusCode: string
+  color?: string | null
+  sort: number
+  merchantCount: number
+  ratio: number
+}
+
+export interface MerchantStatusStatistics {
+  totalAdminCount: number
+  totalMerchantCount: number
+  statusStats: MerchantStatusStatItem[]
+  adminStats: AdminMerchantStatusStatItem[]
+}
+
+export interface AdminMerchantStatusStatItem {
+  adminId: number
+  adminName: string
+  username: string
+  phone?: string | null
+  status: AdminStatus
+  merchantCount: number
+  statusStats: MerchantStatusStatItem[]
+}
+
 export interface MerchantStatus {
   id: number
   name: string

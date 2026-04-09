@@ -57,3 +57,48 @@ export const put = <T>(url: string, data?: unknown, config?: AxiosRequestConfig)
 
 export const del = <T>(url: string, config?: AxiosRequestConfig) =>
   service.delete<never, T>(url, config)
+
+export const download = async (url: string, config?: AxiosRequestConfig) => {
+  const userStore = useUserStore()
+
+  try {
+    return await axios.request<Blob>({
+      baseURL: '/api',
+      timeout: 15000,
+      responseType: 'blob',
+      url,
+      ...config,
+      headers: {
+        ...(config?.headers || {}),
+        ...(userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {}),
+      },
+    })
+  } catch (error) {
+    const axiosError = error as AxiosError<Blob>
+    const status = axiosError.response?.status
+
+    if (status === 401) {
+      userStore.clearAuth()
+      if (router.currentRoute.value.path !== '/login') {
+        await router.replace('/login')
+      }
+      ElMessage.error('登录状态失效，请重新登录')
+      throw error
+    }
+
+    let message = axiosError.message || '下载失败'
+    const blob = axiosError.response?.data
+    if (blob instanceof Blob) {
+      try {
+        const text = await blob.text()
+        const payload = JSON.parse(text) as Partial<ApiResponse<null>>
+        message = payload.message || message
+      } catch {
+        // ignore parse error and fall back to default message
+      }
+    }
+
+    ElMessage.error(message)
+    throw error
+  }
+}
